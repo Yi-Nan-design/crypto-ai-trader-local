@@ -37,6 +37,7 @@ from .monitoring import (
 )
 from .progress import safe_replace_text
 from .regime import latest_regime_state
+from .shadow_learning import build_shadow_learning_decision
 from .strategy import StrategyContext, StrategyOrchestrator
 from .strategy_config import primary_label_horizon, primary_label_min_return
 from .time_utils import beijing_now_iso, beijing_stamp
@@ -212,11 +213,11 @@ def train_live_symbol(
     *,
     include_realtime: bool = True,
     model_suffix: str = "live",
-    max_model_trials: int = 1,
-    time_budget_minutes: float = 3.0,
+    max_model_trials: int = 4,
+    time_budget_minutes: float = 6.0,
     complexity: str = "standard",
-    rolling_folds: int = 0,
-    max_training_rows: int = 3000,
+    rolling_folds: int = 1,
+    max_training_rows: int = 8_000,
 ) -> dict[str, object]:
     symbol = symbol.upper()
     raw = load_symbol_interval(cfg.data_dir, symbol, interval, include_realtime=include_realtime)
@@ -322,6 +323,19 @@ def train_live_symbol(
         "short": float(latest_direction_raw["short"][0]),
         "trade": float(latest_direction_raw["trade"][0]),
         "up": float(latest_direction_raw["up"][0]),
+    }
+    latest_shadow_raw = bundle.predict_shadow_direction_probabilities(
+        latest_x
+    )
+    latest_shadow_probabilities: dict[str, float | bool] = {
+        "long": float(latest_shadow_raw["long"][0]),
+        "short": float(latest_shadow_raw["short"][0]),
+        "long_model_available": bool(
+            latest_shadow_raw["long_model_available"][0]
+        ),
+        "short_model_available": bool(
+            latest_shadow_raw["short_model_available"][0]
+        ),
     }
     latest_horizon_probabilities = {
         key: float(value[0]) if hasattr(value, "__len__") else float(value)
@@ -636,6 +650,41 @@ def train_live_symbol(
             )
         )
 
+    latest_funding_rate = float(
+        pd.to_numeric(
+            pd.Series(
+                [
+                    latest_row.iloc[-1].get(
+                        "funding_rate_8h",
+                        0.0,
+                    )
+                ]
+            ),
+            errors="coerce",
+        ).fillna(0.0).iloc[0]
+    )
+    shadow_learning = build_shadow_learning_decision(
+        model_report,
+        latest_shadow_probabilities,
+        execution_allowed=bool(
+            latest_execution_decision["allow_execution"]
+        ),
+        regime_risk_off=bool(
+            latest_regime.risk_off
+            if latest_regime is not None
+            else False
+        ),
+        liquidity_score=latest_liquidity_score,
+        min_liquidity_score=cfg.portfolio_min_liquidity_score,
+        funding_rate=latest_funding_rate,
+        funding_crowding_limit=cfg.funding_crowding_max_rate,
+        min_signal_count=cfg.shadow_min_signal_count,
+        min_profit_factor=cfg.shadow_min_profit_factor,
+        max_position_fraction=cfg.shadow_max_position_fraction,
+        leverage=cfg.shadow_leverage,
+        enabled=cfg.shadow_learning_enabled,
+    )
+
     report = {
         "created_utc": beijing_now_iso(),
         "created_beijing": beijing_now_iso(),
@@ -706,6 +755,8 @@ def train_live_symbol(
         "risk_reason_counts": risk_reason_counts,
         "backtest_risk_reason_counts": backtest_risk_reason_counts,
         "latest_direction_probabilities": latest_direction_probabilities,
+        "latest_shadow_probabilities": latest_shadow_probabilities,
+        "shadow_learning": shadow_learning,
         "latest_horizon_probabilities": latest_horizon_probabilities,
         "recent_horizon_matches": horizon_matches,
         "metrics": bundle.metrics,
@@ -821,11 +872,11 @@ def sync_and_train_live(
     limit: int = 1500,
     base_url: str = "https://fapi.binance.com",
     model_suffix: str = "live",
-    max_model_trials: int = 1,
-    time_budget_minutes: float = 3.0,
+    max_model_trials: int = 4,
+    time_budget_minutes: float = 6.0,
     complexity: str = "standard",
-    rolling_folds: int = 0,
-    max_training_rows: int = 3000,
+    rolling_folds: int = 1,
+    max_training_rows: int = 8_000,
 ) -> dict[str, object]:
     sync_results = sync_recent_futures_klines(
         symbols=symbols,

@@ -531,11 +531,53 @@ class ModelBundle:
             "uses_tradeability_model": np.full(len(prob_up), bool(trade_model is not None), dtype=bool),
         }
 
+    def predict_shadow_direction_probabilities(
+        self,
+        x: np.ndarray,
+    ) -> dict[str, np.ndarray]:
+        """Return probabilities from validation-qualified shadow side models."""
+
+        x_scaled = self.scaler.transform(x)
+        auxiliary = getattr(self, "auxiliary_models", {}) or {}
+        long_model = auxiliary.get("shadow_direction_long")
+        short_model = auxiliary.get("shadow_direction_short")
+        rows = len(x_scaled)
+        return {
+            "long": (
+                np.asarray(
+                    long_model.predict_proba(x_scaled)[:, 1],
+                    dtype=float,
+                )
+                if long_model is not None
+                else np.zeros(rows, dtype=float)
+            ),
+            "short": (
+                np.asarray(
+                    short_model.predict_proba(x_scaled)[:, 1],
+                    dtype=float,
+                )
+                if short_model is not None
+                else np.zeros(rows, dtype=float)
+            ),
+            "long_model_available": np.full(
+                rows,
+                long_model is not None,
+                dtype=bool,
+            ),
+            "short_model_available": np.full(
+                rows,
+                short_model is not None,
+                dtype=bool,
+            ),
+        }
+
     def predict_horizon_probabilities(self, x: np.ndarray) -> dict[str, float | np.ndarray]:
         x_scaled = self.scaler.transform(x)
         payload: dict[str, float | np.ndarray] = {"main": self.model.predict_proba(x_scaled)[:, 1]}
         for key, model in getattr(self, "auxiliary_models", {}).items():
-            if str(key).startswith(("direction_", "alpha_")):
+            if str(key).startswith(
+                ("direction_", "shadow_direction_", "alpha_")
+            ):
                 continue
             payload[key] = model.predict_proba(x_scaled)[:, 1]
         return payload

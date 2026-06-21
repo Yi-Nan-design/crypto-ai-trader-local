@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import json
 import os
 from pathlib import Path
@@ -23,6 +24,7 @@ from .portfolio_paper import (
     rebalance_portfolio_paper_state,
 )
 from .progress import safe_replace_text, tracker_for_reports
+from .shadow_learning import shadow_portfolio_report
 from .time_utils import add_beijing_aliases, beijing_now_iso, beijing_stamp
 
 
@@ -85,6 +87,91 @@ def read_control(state_dir: Path) -> str:
     return str(payload.get("command", "run")).lower()
 
 
+def _run_portfolio_cycle(
+    reports: list[dict[str, Any]],
+    return_matrix: pd.DataFrame,
+    cfg: Any,
+    *,
+    interval: str,
+    state_dir: Path,
+    ledger_name: str,
+) -> tuple[dict[str, Any], Path, Any]:
+    """Advance one isolated portfolio planning and paper-ledger path."""
+
+    state_dir.mkdir(parents=True, exist_ok=True)
+    paper_state_path = (
+        state_dir / f"{ledger_name}_paper_{interval}.json"
+    )
+    paper_ledger_path = (
+        cfg.reports_dir / f"{ledger_name}_paper_{interval}.jsonl"
+    )
+    paper_latest_path = (
+        cfg.reports_dir / f"{ledger_name}_paper_latest.json"
+    )
+    paper_state = load_portfolio_paper_state(
+        paper_state_path,
+        interval=interval,
+        cfg=cfg,
+    )
+    portfolio_mark, mark_reason = extract_aligned_mark(reports)
+    paper_event = mark_portfolio_paper_state(
+        paper_state,
+        portfolio_mark,
+        mark_reason=mark_reason,
+    )
+    risk_before = portfolio_paper_risk_state(paper_state, cfg)
+    snapshot = build_portfolio_snapshot(
+        reports,
+        return_matrix,
+        cfg,
+        interval=interval,
+        current_drawdown=float(risk_before["drawdown"]),
+        current_daily_return=float(risk_before["daily_return"]),
+        current_risk_source=f"{ledger_name}_paper_ledger",
+        input_available=portfolio_mark is not None,
+        input_unavailable_reason=(
+            "portfolio_blocked_unaligned_market_data"
+            if mark_reason == "unaligned_latest_open_time"
+            else f"portfolio_blocked_{mark_reason}"
+        ),
+        expected_open_time=(
+            int(portfolio_mark.open_time)
+            if portfolio_mark is not None
+            else None
+        ),
+    )
+    if (
+        bool(paper_event.get("advanced"))
+        and not bool(risk_before["allow_portfolio"])
+        and any(
+            abs(float(weight)) > 1e-15
+            for weight in paper_state.weights.values()
+        )
+    ):
+        paper_state.circuit_breaker_events += 1
+    paper_event = rebalance_portfolio_paper_state(
+        paper_state,
+        dict(snapshot["decision"]["weights"]),
+        cfg,
+        paper_event,
+    )
+    risk_after = portfolio_paper_risk_state(paper_state, cfg)
+    paper_latest = persist_portfolio_paper_state(
+        paper_state,
+        paper_event,
+        state_path=paper_state_path,
+        ledger_path=paper_ledger_path,
+        latest_path=paper_latest_path,
+        max_history=cfg.portfolio_paper_max_history,
+    )
+    snapshot["paper"] = {
+        **paper_latest,
+        "risk_before_decision": risk_before,
+        "risk_after_rebalance": risk_after,
+    }
+    return snapshot, paper_latest_path, paper_state
+
+
 def write_state(state_dir: Path, **updates: Any) -> None:
     path = state_path(state_dir)
     payload = read_json(path, {})
@@ -103,11 +190,11 @@ def runner_once(
     base_url: str,
     model_suffix: str,
     state_dir: Path,
-    max_model_trials: int = 1,
-    time_budget_minutes: float = 3.0,
+    max_model_trials: int = 4,
+    time_budget_minutes: float = 6.0,
     complexity: str = "standard",
-    rolling_folds: int = 0,
-    max_training_rows: int = 3000,
+    rolling_folds: int = 1,
+    max_training_rows: int = 8_000,
     progress: Any | None = None,
 ) -> dict[str, Any]:
     cfg = load_config()
@@ -189,85 +276,58 @@ def runner_once(
         if return_series
         else pd.DataFrame()
     )
-    state_dir.mkdir(parents=True, exist_ok=True)
-    portfolio_paper_state_path = (
-        state_dir / f"portfolio_paper_{interval}.json"
-    )
-    portfolio_paper_ledger_path = (
-        cfg.reports_dir / f"portfolio_paper_{interval}.jsonl"
-    )
-    portfolio_paper_latest_path = (
-        cfg.reports_dir / "portfolio_paper_latest.json"
-    )
-    portfolio_paper_state = load_portfolio_paper_state(
-        portfolio_paper_state_path,
-        interval=interval,
-        cfg=cfg,
-    )
-    portfolio_mark, portfolio_mark_reason = extract_aligned_mark(reports)
-    portfolio_paper_event = mark_portfolio_paper_state(
-        portfolio_paper_state,
-        portfolio_mark,
-        mark_reason=portfolio_mark_reason,
-    )
-    portfolio_risk_before = portfolio_paper_risk_state(
-        portfolio_paper_state,
-        cfg,
-    )
-    portfolio_snapshot = build_portfolio_snapshot(
-        reports,
-        return_matrix,
-        cfg,
-        interval=interval,
-        current_drawdown=float(portfolio_risk_before["drawdown"]),
-        current_daily_return=float(
-            portfolio_risk_before["daily_return"]
-        ),
-        current_risk_source="portfolio_paper_ledger",
-        input_available=portfolio_mark is not None,
-        input_unavailable_reason=(
-            "portfolio_blocked_unaligned_market_data"
-            if portfolio_mark_reason == "unaligned_latest_open_time"
-            else f"portfolio_blocked_{portfolio_mark_reason}"
-        ),
-        expected_open_time=(
-            int(portfolio_mark.open_time)
-            if portfolio_mark is not None
-            else None
-        ),
-    )
-    if (
-        bool(portfolio_paper_event.get("advanced"))
-        and not bool(portfolio_risk_before["allow_portfolio"])
-        and any(
-            abs(float(weight)) > 1e-15
-            for weight in portfolio_paper_state.weights.values()
+    portfolio_snapshot, portfolio_paper_latest_path, portfolio_paper_state = (
+        _run_portfolio_cycle(
+            reports,
+            return_matrix,
+            cfg,
+            interval=interval,
+            state_dir=state_dir,
+            ledger_name="portfolio",
         )
-    ):
-        portfolio_paper_state.circuit_breaker_events += 1
-    portfolio_paper_event = rebalance_portfolio_paper_state(
-        portfolio_paper_state,
-        dict(portfolio_snapshot["decision"]["weights"]),
+    )
+    shadow_cfg = replace(
         cfg,
-        portfolio_paper_event,
+        default_leverage=int(cfg.shadow_leverage),
+        portfolio_target_gross_exposure=min(
+            float(cfg.portfolio_target_gross_exposure),
+            float(cfg.shadow_target_gross_exposure),
+        ),
+        portfolio_max_total_leverage=min(
+            float(cfg.portfolio_max_total_leverage),
+            float(cfg.shadow_target_gross_exposure),
+        ),
+        portfolio_max_single_weight=min(
+            float(cfg.portfolio_max_single_weight),
+            float(cfg.shadow_max_position_fraction),
+        ),
+        portfolio_max_sector_exposure=min(
+            float(cfg.portfolio_max_sector_exposure),
+            float(cfg.shadow_target_gross_exposure),
+        ),
+        portfolio_max_cluster_exposure=min(
+            float(cfg.portfolio_max_cluster_exposure),
+            float(cfg.shadow_target_gross_exposure),
+        ),
     )
-    portfolio_risk_after = portfolio_paper_risk_state(
-        portfolio_paper_state,
-        cfg,
+    shadow_reports = [
+        shadow_portfolio_report(report)
+        for report in reports
+    ]
+    (
+        shadow_portfolio_snapshot,
+        shadow_portfolio_paper_latest_path,
+        shadow_portfolio_paper_state,
+    ) = _run_portfolio_cycle(
+        shadow_reports,
+        return_matrix,
+        shadow_cfg,
+        interval=interval,
+        state_dir=state_dir,
+        ledger_name="shadow_portfolio",
     )
-    portfolio_paper_latest = persist_portfolio_paper_state(
-        portfolio_paper_state,
-        portfolio_paper_event,
-        state_path=portfolio_paper_state_path,
-        ledger_path=portfolio_paper_ledger_path,
-        latest_path=portfolio_paper_latest_path,
-        max_history=cfg.portfolio_paper_max_history,
-    )
-    portfolio_snapshot["paper"] = {
-        **portfolio_paper_latest,
-        "risk_before_decision": portfolio_risk_before,
-        "risk_after_rebalance": portfolio_risk_after,
-    }
+    shadow_portfolio_snapshot["mode"] = "shadow_learning"
+    shadow_portfolio_snapshot["strict_candidate_unchanged"] = True
     payload = {
         "created_utc": utc_now(),
         "created_beijing": utc_now(),
@@ -277,16 +337,28 @@ def runner_once(
         "items": reports,
         "ranked": ranked,
         "portfolio": portfolio_snapshot,
+        "shadow_portfolio": shadow_portfolio_snapshot,
     }
     cfg.reports_dir.mkdir(parents=True, exist_ok=True)
     latest_path = cfg.reports_dir / "runner_live_latest.json"
     stamped_path = cfg.reports_dir / f"runner_live_{interval}_{beijing_stamp()}.json"
     portfolio_path = cfg.reports_dir / "portfolio_snapshot_latest.json"
+    shadow_portfolio_path = (
+        cfg.reports_dir / "shadow_portfolio_snapshot_latest.json"
+    )
     safe_replace_text(latest_path, json.dumps(payload, indent=2, ensure_ascii=False))
     safe_replace_text(stamped_path, json.dumps(payload, indent=2, ensure_ascii=False))
     safe_replace_text(
         portfolio_path,
         json.dumps(portfolio_snapshot, indent=2, ensure_ascii=False),
+    )
+    safe_replace_text(
+        shadow_portfolio_path,
+        json.dumps(
+            shadow_portfolio_snapshot,
+            indent=2,
+            ensure_ascii=False,
+        ),
     )
     def selected_risk_profile(item: dict) -> str | None:
         strategy = item.get("small_account_strategy") or {}
@@ -305,6 +377,14 @@ def runner_once(
         latest_portfolio=portfolio_snapshot["decision"],
         latest_portfolio_paper=str(portfolio_paper_latest_path),
         latest_portfolio_paper_state=portfolio_paper_state.to_dict(),
+        latest_shadow_portfolio_report=str(shadow_portfolio_path),
+        latest_shadow_portfolio=shadow_portfolio_snapshot["decision"],
+        latest_shadow_portfolio_paper=str(
+            shadow_portfolio_paper_latest_path
+        ),
+        latest_shadow_portfolio_paper_state=(
+            shadow_portfolio_paper_state.to_dict()
+        ),
         latest_ranked=[
             {
                 "symbol": item["symbol"],
@@ -322,6 +402,7 @@ def runner_once(
                     (item.get("model_report") or {}).get("model_selection_gate") or {}
                 ).get("rejected_by_validation_trading_gate"),
                 "selected_risk_profile": selected_risk_profile(item),
+                "shadow_learning": item.get("shadow_learning"),
             }
             for item in ranked
         ],
@@ -345,6 +426,10 @@ def run_loop(args: argparse.Namespace) -> None:
         interval=args.interval,
         limit=args.limit,
         train_every_seconds=args.train_every_seconds,
+        live_max_model_trials=args.live_max_model_trials,
+        live_time_budget_minutes=args.live_time_budget_minutes,
+        live_complexity=args.live_complexity,
+        live_rolling_folds=args.live_rolling_folds,
         live_max_training_rows=args.live_max_training_rows,
         poll_seconds=args.poll_seconds,
         proxy=proxy,
@@ -416,18 +501,34 @@ def run_loop(args: argparse.Namespace) -> None:
 def cmd_once(args: argparse.Namespace) -> None:
     cfg = load_config(args.config)
     apply_proxy(args.proxy or cfg.https_proxy, cfg.auto_detect_proxy)
-    payload = runner_once(
-        symbols=[item.upper() for item in args.symbols],
-        interval=args.interval,
-        limit=args.limit,
-        base_url=args.base_url,
-        model_suffix=args.model_suffix,
-        state_dir=Path(args.state_dir),
-        max_model_trials=args.live_max_model_trials,
-        time_budget_minutes=args.live_time_budget_minutes,
-        complexity=args.live_complexity,
-        rolling_folds=args.live_rolling_folds,
-        max_training_rows=args.live_max_training_rows,
+    state_dir = Path(args.state_dir)
+    try:
+        payload = runner_once(
+            symbols=[item.upper() for item in args.symbols],
+            interval=args.interval,
+            limit=args.limit,
+            base_url=args.base_url,
+            model_suffix=args.model_suffix,
+            state_dir=state_dir,
+            max_model_trials=args.live_max_model_trials,
+            time_budget_minutes=args.live_time_budget_minutes,
+            complexity=args.live_complexity,
+            rolling_folds=args.live_rolling_folds,
+            max_training_rows=args.live_max_training_rows,
+        )
+    except Exception as exc:
+        write_state(
+            state_dir,
+            status="error",
+            last_error=str(exc),
+            last_error_utc=utc_now(),
+        )
+        raise
+    write_state(
+        state_dir,
+        status="completed",
+        completed_utc=utc_now(),
+        last_error="",
     )
     print(json.dumps(payload, indent=2))
 
@@ -454,11 +555,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--poll-seconds", type=int, default=30)
     run.add_argument("--error-sleep-seconds", type=int, default=120)
     run.add_argument("--proxy", default=None)
-    run.add_argument("--live-max-model-trials", type=int, default=1)
-    run.add_argument("--live-time-budget-minutes", type=float, default=3.0)
+    run.add_argument("--live-max-model-trials", type=int, default=4)
+    run.add_argument("--live-time-budget-minutes", type=float, default=6.0)
     run.add_argument("--live-complexity", default="standard", choices=["standard", "expanded", "deep", "blackbox"])
-    run.add_argument("--live-rolling-folds", type=int, default=0)
-    run.add_argument("--live-max-training-rows", type=int, default=3000)
+    run.add_argument("--live-rolling-folds", type=int, default=1)
+    run.add_argument("--live-max-training-rows", type=int, default=8_000)
     run.set_defaults(func=run_loop)
 
     once = sub.add_parser("once")
@@ -467,11 +568,11 @@ def build_parser() -> argparse.ArgumentParser:
     once.add_argument("--limit", type=int, default=800)
     once.add_argument("--base-url", default="https://fapi.binance.com")
     once.add_argument("--model-suffix", default="runner_live")
-    once.add_argument("--live-max-model-trials", type=int, default=1)
-    once.add_argument("--live-time-budget-minutes", type=float, default=3.0)
+    once.add_argument("--live-max-model-trials", type=int, default=4)
+    once.add_argument("--live-time-budget-minutes", type=float, default=6.0)
     once.add_argument("--live-complexity", default="standard", choices=["standard", "expanded", "deep", "blackbox"])
-    once.add_argument("--live-rolling-folds", type=int, default=0)
-    once.add_argument("--live-max-training-rows", type=int, default=3000)
+    once.add_argument("--live-rolling-folds", type=int, default=1)
+    once.add_argument("--live-max-training-rows", type=int, default=8_000)
     once.add_argument("--proxy", default=None)
     once.set_defaults(func=cmd_once)
 

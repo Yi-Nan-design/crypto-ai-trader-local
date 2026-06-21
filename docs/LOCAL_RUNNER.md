@@ -117,6 +117,10 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_runner_task.ps1"
 - 默认周期：`5m`
 - 默认 K 线数量：`800`
 - 默认训练间隔：`900` 秒
+- 每轮最多尝试模型数：`4`
+- 单个训练目标时间预算：`6` 分钟
+- 滚动验证折数：`1`
+- 单次训练最多使用最近 `8000` 行；完整历史仍保留在本地数据目录
 - 默认代理：自动检测，优先使用 `http://127.0.0.1:7890`
 - 实盘交易：关闭
 
@@ -150,11 +154,24 @@ reports/runner_live_{INTERVAL}_*.json
 reports/*_runner_live_train_metrics.json
 reports/*_runner_live_backtest.csv
 models/{SYMBOL}_{INTERVAL}_runner_live.pkl
+reports/portfolio_snapshot_latest.json
+reports/portfolio_paper_latest.json
+state/portfolio_paper_{INTERVAL}.json
+reports/shadow_portfolio_snapshot_latest.json
+reports/shadow_portfolio_paper_latest.json
+state/shadow_portfolio_paper_{INTERVAL}.json
 logs/runner.gui.out.log
 logs/runner.gui.err.log
 logs/runner.task.out.log
 logs/runner.task.err.log
 ```
+
+严格组合和 Shadow 学习组合完全分账：
+
+- 严格组合继续使用原有多窗口验证、交易门控和风险约束，不会为了增加成交而降低门槛。
+- Shadow 只使用验证集上具备正收益、正期望、足够信号数和足够 profit factor 的单边模型。
+- Shadow 支持做多和做空，默认 `1x`，单币种最大目标仓位 `5%`，组合总敞口最大 `20%`。
+- Shadow 只写模拟账本，不连接 API Key，也不会产生实盘订单。
 
 ## VS Code
 

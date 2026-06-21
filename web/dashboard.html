@@ -710,8 +710,12 @@
         <div class="stat"><label>Paper 权益 / 收益</label><strong id="portfolioPaperEquity">-</strong></div>
         <div class="stat"><label>Paper 回撤 / 日收益</label><strong id="portfolioPaperRisk">-</strong></div>
         <div class="stat"><label>账本状态</label><strong id="portfolioPaperState">-</strong></div>
+        <div class="stat"><label>Shadow 总敞口</label><strong id="shadowPortfolioGross">-</strong></div>
+        <div class="stat"><label>Shadow 权益 / 收益</label><strong id="shadowPortfolioEquity">-</strong></div>
+        <div class="stat"><label>Shadow 状态</label><strong id="shadowPortfolioState">-</strong></div>
       </div>
       <div id="portfolioWeightsWrap" style="margin-top:12px;"></div>
+      <div id="shadowPortfolioWeightsWrap" style="margin-top:12px;"></div>
     </section>
 
     <section>
@@ -866,7 +870,11 @@
         symbols: selectedSymbols(),
         interval: state.interval,
         limit: Number($("limitInput").value || 800),
-        train_every_seconds: Number($("trainEveryInput").value || 900)
+        train_every_seconds: Number($("trainEveryInput").value || 900),
+        live_max_model_trials: Number(state.config?.runner_max_model_trials || 4),
+        live_time_budget_minutes: Number(state.config?.runner_time_budget_minutes || 6),
+        live_rolling_folds: Number(state.config?.runner_rolling_folds || 1),
+        live_max_training_rows: Number(state.config?.runner_max_training_rows || 8000)
       };
     }
 
@@ -1020,7 +1028,7 @@
       const ranked = data.latest_ranked || [];
       $("rankedWrap").innerHTML = ranked.length ? `
         <table>
-          <thead><tr><th>候选</th><th>模型</th><th>上涨概率</th><th>5分钟</th><th>10分钟</th><th>风险</th><th>收益</th><th>回撤</th></tr></thead>
+          <thead><tr><th>候选</th><th>模型</th><th>上涨概率</th><th>5分钟</th><th>10分钟</th><th>Shadow</th><th>风险</th><th>收益</th><th>回撤</th></tr></thead>
           <tbody>
             ${ranked.map((item) => `
               <tr>
@@ -1029,6 +1037,7 @@
                 <td>${fmtPct(item.latest_up_probability)}</td>
                 <td>${fmtPct(item.latest_horizon_probabilities?.next_5m)}</td>
                 <td>${fmtPct(item.latest_horizon_probabilities?.next_10m)}</td>
+                <td title="${escapeHtml((item.shadow_learning?.blockers || []).join(", "))}">${item.shadow_learning?.latest_signal_active ? `${item.shadow_learning.selected_side === "short" ? "模拟做空" : "模拟做多"} ${fmtPct(item.shadow_learning.target_exposure)}` : (item.shadow_learning?.eligible ? `等待阈值 ${fmtPct(item.shadow_learning.signal_threshold)}` : "未达资格")}</td>
                 <td title="${item.latest_risk_decision?.reason || "旧报告无风险数据"}">${item.latest_risk_decision ? `${item.latest_risk_decision.allow_trade ? "允许" : "否决"} / ${item.latest_risk_decision.risk_level || "-"}` : "-"}</td>
                 <td class="${signedClass(item.total_return)}">${fmtPct(item.total_return)}</td>
                 <td class="${signedClass(item.max_drawdown)}">${fmtPct(item.max_drawdown)}</td>
@@ -1259,7 +1268,7 @@
       $("dataMaintenanceStatus").textContent = `${payload.dry_run ? "预演" : "完成"} ${compactions}组 ${tmpCleaned}临时`;
     }
 
-    function renderPortfolio(data) {
+    function renderPortfolio(data, shadowData = {}) {
       const empty = !data || data.empty;
       const payload = empty ? {} : (data.payload || {});
       const decision = payload.decision || {};
@@ -1270,6 +1279,13 @@
       const paperEvent = paper.latest_event || {};
       const weights = decision.weights || {};
       const entries = Object.entries(weights).sort((left, right) => Math.abs(right[1]) - Math.abs(left[1]));
+      const shadowPayload = shadowData && !shadowData.empty ? (shadowData.payload || {}) : {};
+      const shadowDecision = shadowPayload.decision || {};
+      const shadowPaper = shadowPayload.paper || {};
+      const shadowState = shadowPaper.state || {};
+      const shadowEvent = shadowPaper.latest_event || {};
+      const shadowEntries = Object.entries(shadowDecision.weights || {})
+        .sort((left, right) => Math.abs(right[1]) - Math.abs(left[1]));
       if (empty) {
         $("portfolioStatus").textContent = "未生成";
         $("portfolioGross").textContent = "-";
@@ -1280,7 +1296,11 @@
         $("portfolioPaperEquity").textContent = "-";
         $("portfolioPaperRisk").textContent = "-";
         $("portfolioPaperState").textContent = "-";
+        $("shadowPortfolioGross").textContent = "-";
+        $("shadowPortfolioEquity").textContent = "-";
+        $("shadowPortfolioState").textContent = "-";
         $("portfolioWeightsWrap").innerHTML = `<div class="empty">启动多币种 runner 后生成只读目标权重。</div>`;
+        $("shadowPortfolioWeightsWrap").innerHTML = `<div class="empty">等待 Shadow 学习快照。</div>`;
         $("portfolioRefreshText").textContent = "等待 runner 生成";
         return;
       }
@@ -1301,6 +1321,15 @@
       $("portfolioPaperState").textContent = paperState.steps === undefined
         ? "-"
         : `${paperState.steps}步 / ${paperEvent.action || "-"} / ${paperState.last_reason || "-"}`;
+      $("shadowPortfolioGross").textContent = shadowDecision.gross_exposure === undefined
+        ? "-"
+        : fmtPct(shadowDecision.gross_exposure);
+      $("shadowPortfolioEquity").textContent = shadowState.equity === undefined
+        ? "等待新快照"
+        : `${fmtNum(shadowState.equity, 2)} / ${fmtPct(shadowState.total_return)}`;
+      $("shadowPortfolioState").textContent = shadowState.steps === undefined
+        ? "-"
+        : `${shadowState.steps}步 / ${shadowEvent.action || "-"} / ${shadowDecision.reason || "-"}`;
       $("portfolioRefreshText").textContent = `局部刷新 ${fmtDateTime(payload.created_beijing)} | 仅规划，不下单`;
       $("portfolioWeightsWrap").innerHTML = entries.length ? `
         <table>
@@ -1317,6 +1346,22 @@
           </tbody>
         </table>
       ` : `<div class="empty">当前没有通过阈值、风险与流动性约束的目标。</div>`;
+      $("shadowPortfolioWeightsWrap").innerHTML = shadowEntries.length ? `
+        <h3 style="margin:14px 0 8px;">Shadow 学习仓位（1x，单币最多 5%）</h3>
+        <table>
+          <thead><tr><th>币种</th><th>Shadow 权重</th><th>方向</th><th>资格与约束</th></tr></thead>
+          <tbody>
+            ${shadowEntries.map(([symbol, weight]) => `
+              <tr>
+                <td>${escapeHtml(symbol)}</td>
+                <td class="${signedClass(weight)}">${fmtPct(weight)}</td>
+                <td>${weight > 0 ? "模拟做多" : (weight < 0 ? "模拟做空" : "未触发")}</td>
+                <td>${escapeHtml(shadowDecision.asset_reasons?.[symbol] || "-")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : `<div class="empty">当前没有满足验证收益、PF、信号数及实时安全条件的 Shadow 信号。</div>`;
     }
 
     function drawTriangle(ctx, x, y, size, direction, color) {
@@ -1601,8 +1646,11 @@
     }
 
     async function refreshPortfolio() {
-      const portfolio = await fetchJson("/api/portfolio/latest");
-      renderPortfolio(portfolio);
+      const [portfolio, shadowPortfolio] = await Promise.all([
+        fetchJson("/api/portfolio/latest"),
+        fetchJson("/api/shadow-portfolio/latest")
+      ]);
+      renderPortfolio(portfolio, shadowPortfolio);
     }
 
     async function guardedRefresh(key, fn) {

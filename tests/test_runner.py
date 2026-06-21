@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
+from copy import deepcopy
 import tempfile
 import unittest
 from unittest.mock import patch
 
 import pandas as pd
 
+from crypto_ai_trader.config import TraderConfig
 from crypto_ai_trader.portfolio_paper import new_portfolio_paper_state
 from crypto_ai_trader.runner import runner_once
 
 
-def config(root: Path) -> SimpleNamespace:
-    return SimpleNamespace(
+def config(root: Path) -> TraderConfig:
+    return TraderConfig(
         data_dir=root / "data",
         reports_dir=root / "reports",
         portfolio_correlation_lookback=2,
@@ -25,7 +26,6 @@ def config(root: Path) -> SimpleNamespace:
         slippage_rate=0.0001,
         max_daily_loss=0.03,
         portfolio_max_drawdown=0.10,
-        ensure_dirs=lambda: None,
     )
 
 
@@ -72,6 +72,7 @@ class RunnerTests(unittest.TestCase):
                     }
                 }
             }
+            shadow_snapshot = deepcopy(snapshot)
 
             with (
                 patch(
@@ -96,7 +97,7 @@ class RunnerTests(unittest.TestCase):
                 ),
                 patch(
                     "crypto_ai_trader.runner.build_portfolio_snapshot",
-                    return_value=snapshot,
+                    side_effect=[snapshot, shadow_snapshot],
                 ) as build_snapshot,
                 patch(
                     "crypto_ai_trader.runner.persist_portfolio_paper_state",
@@ -118,9 +119,12 @@ class RunnerTests(unittest.TestCase):
                 )
 
             self.assertEqual(
-                build_snapshot.call_args.kwargs["expected_open_time"],
+                build_snapshot.call_args_list[0].kwargs[
+                    "expected_open_time"
+                ],
                 1_782_030_300_000,
             )
+            self.assertEqual(build_snapshot.call_count, 2)
             self.assertEqual(
                 payload["portfolio"]["decision"]["weights"],
                 {"ETHUSDT": 0.0, "BNBUSDT": 0.0},
@@ -129,6 +133,10 @@ class RunnerTests(unittest.TestCase):
                 payload["portfolio"]["paper"]["safety"][
                     "live_trading_enabled"
                 ]
+            )
+            self.assertEqual(
+                payload["shadow_portfolio"]["mode"],
+                "shadow_learning",
             )
 
 

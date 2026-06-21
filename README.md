@@ -220,11 +220,21 @@ reports/portfolio_snapshot_latest.json
 reports/portfolio_paper_latest.json
 reports/portfolio_paper_{INTERVAL}.jsonl
 state/portfolio_paper_{INTERVAL}.json
+reports/shadow_portfolio_snapshot_latest.json
+reports/shadow_portfolio_paper_latest.json
+reports/shadow_portfolio_paper_{INTERVAL}.jsonl
+state/shadow_portfolio_paper_{INTERVAL}.json
 ```
 
 `portfolio_snapshot_latest.json` 是组合构建层的只读规划结果。控制台每
 10 秒只刷新组合区域，显示总敞口、净敞口、相关簇和逐币目标权重。
 组合输出不会连接实盘执行。
+
+当严格候选因多窗口验证不足而没有成交时，runner 还会维护一条完全
+独立的 Shadow 学习链。它只允许验证集上具有正收益、正期望、足够
+信号数和足够 profit factor 的单边模型进入低风险模拟，支持做多和
+做空。默认杠杆为 `1x`、单币种最大仓位为 `5%`、组合总敞口不超过
+`20%`。Shadow 结果不会反向放宽严格策略，也不会连接实盘执行。
 
 组合 paper 账本只在多个币种最新闭合 K 线时间一致时更新，并先按上一轮
 权重计算本根 K 线收益，再应用新目标权重。它会记录组合权益、峰值回撤、

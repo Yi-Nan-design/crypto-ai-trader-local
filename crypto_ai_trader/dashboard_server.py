@@ -167,6 +167,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     )
                 )
                 return
+            if parsed.path == "/api/shadow-portfolio/latest":
+                self._send_json(
+                    read_latest_report(
+                        "shadow_portfolio_snapshot_latest.json",
+                        "No shadow learning portfolio snapshot has been generated yet.",
+                    )
+                )
+                return
             if parsed.path == "/api/model-optimization/reports":
                 params = urllib.parse.parse_qs(parsed.query)
                 try:
@@ -508,6 +516,14 @@ def read_ui_config() -> dict[str, Any]:
         "default_interval": cfg.realtime_interval,
         "default_limit": min(cfg.realtime_limit, 800),
         "default_train_every_seconds": 900,
+        "runner_max_model_trials": cfg.runner_max_model_trials,
+        "runner_time_budget_minutes": cfg.runner_time_budget_minutes,
+        "runner_rolling_folds": cfg.runner_rolling_folds,
+        "runner_max_training_rows": cfg.runner_max_training_rows,
+        "shadow_learning_enabled": cfg.shadow_learning_enabled,
+        "shadow_max_position_fraction": (
+            cfg.shadow_max_position_fraction
+        ),
         "live_trading_enabled": False,
     }
 
@@ -781,6 +797,30 @@ def _validated_runner_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "interval": interval,
         "limit": clamp_int(payload.get("limit"), config.get("default_limit", 800), 100, 2000),
         "train_every_seconds": clamp_int(payload.get("train_every_seconds"), config.get("default_train_every_seconds", 900), 60, 86_400),
+        "live_max_model_trials": clamp_int(
+            payload.get("live_max_model_trials"),
+            config.get("runner_max_model_trials", 4),
+            1,
+            32,
+        ),
+        "live_time_budget_minutes": clamp_int(
+            payload.get("live_time_budget_minutes"),
+            int(config.get("runner_time_budget_minutes", 6)),
+            1,
+            60,
+        ),
+        "live_rolling_folds": clamp_int(
+            payload.get("live_rolling_folds"),
+            config.get("runner_rolling_folds", 1),
+            0,
+            5,
+        ),
+        "live_max_training_rows": clamp_int(
+            payload.get("live_max_training_rows"),
+            config.get("runner_max_training_rows", 8_000),
+            3_000,
+            250_000,
+        ),
     }
 
 
@@ -807,6 +847,14 @@ def start_runner(payload: dict[str, Any]) -> dict[str, Any]:
         str(params["limit"]),
         "--train-every-seconds",
         str(params["train_every_seconds"]),
+        "--live-max-model-trials",
+        str(params["live_max_model_trials"]),
+        "--live-time-budget-minutes",
+        str(params["live_time_budget_minutes"]),
+        "--live-rolling-folds",
+        str(params["live_rolling_folds"]),
+        "--live-max-training-rows",
+        str(params["live_max_training_rows"]),
     ]
     set_control(STATE_DIR, "run")
     with out_path.open("ab") as out_log, err_path.open("ab") as err_log:

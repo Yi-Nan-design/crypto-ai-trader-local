@@ -5,6 +5,7 @@ __all__ = [
     "labeling",
     "alpha_models",
     "meta_signal",
+    "shadow_learning",
     "strategy",
     "regime",
     "regime_models",

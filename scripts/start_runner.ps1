@@ -2,7 +2,11 @@ param(
     [string[]]$Symbols = @("ETHUSDT", "BNBUSDT"),
     [string]$Interval = "5m",
     [int]$Limit = 800,
-    [int]$TrainEverySeconds = 900
+    [int]$TrainEverySeconds = 900,
+    [int]$MaxModelTrials = 4,
+    [double]$TimeBudgetMinutes = 6,
+    [int]$RollingFolds = 1,
+    [int]$MaxTrainingRows = 8000
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,7 +23,11 @@ $ArgsList = @(
 ) + $Symbols + @(
     "--interval", $Interval,
     "--limit", "$Limit",
-    "--train-every-seconds", "$TrainEverySeconds"
+    "--train-every-seconds", "$TrainEverySeconds",
+    "--live-max-model-trials", "$MaxModelTrials",
+    "--live-time-budget-minutes", "$TimeBudgetMinutes",
+    "--live-rolling-folds", "$RollingFolds",
+    "--live-max-training-rows", "$MaxTrainingRows"
 )
 
 $OutLog = Join-Path $LogDir "runner.out.log"

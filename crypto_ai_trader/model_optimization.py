@@ -33,6 +33,7 @@ from .models import (
 )
 from .model_selection import rank_model_candidates
 from .progress import safe_replace_text
+from .shadow_learning import select_shadow_threshold_candidate
 from .strategy_calibration import (
     archetype_matches_side,
     archetype_side_robustness,
@@ -645,7 +646,7 @@ def select_directional_model(
     deadline: float,
     max_trials: int = 3,
     cost_buffer: float = 0.001,
-) -> tuple[object | None, dict[str, Any]]:
+) -> tuple[object | None, object | None, dict[str, Any]]:
     if direction == "trade":
         if "edge_trade_target" in train_df.columns and "edge_trade_target" in valid_df.columns:
             target_col = "edge_trade_target"
@@ -666,11 +667,15 @@ def select_directional_model(
     else:
         target_col = f"{direction}_target"
     if target_col not in train_df.columns or target_col not in valid_df.columns:
-        return None, {"direction": direction, "status": "skipped", "reason": f"missing_{target_col}"}
+        return None, None, {
+            "direction": direction,
+            "status": "skipped",
+            "reason": f"missing_{target_col}",
+        }
     y_train = train_df[target_col].to_numpy(dtype=int)
     y_valid = valid_df[target_col].to_numpy(dtype=int)
     if int(y_train.sum()) < 8 or int((1 - y_train).sum()) < 8 or int(y_valid.sum()) < 3 or int((1 - y_valid).sum()) < 3:
-        return None, {
+        return None, None, {
             "direction": direction,
             "status": "skipped",
             "reason": "insufficient_class_balance",
@@ -685,6 +690,9 @@ def select_directional_model(
     ranked: list[dict[str, Any]] = []
     best_model: object | None = None
     best_score = -999.0
+    shadow_model: object | None = None
+    shadow_candidate: dict[str, Any] | None = None
+    shadow_score = -999.0
 
     def threshold_report(prob: np.ndarray) -> dict[str, Any]:
         rows: list[dict[str, float]] = []
@@ -778,10 +786,36 @@ def select_directional_model(
             if score > best_score:
                 best_score = score
                 best_model = model
+            candidate = select_shadow_threshold_candidate(
+                list(thresholds.get("ranking") or []),
+            )
+            if candidate is not None:
+                candidate_score = (
+                    float(candidate["signal_total_return_after_cost"])
+                    + 0.001
+                    * min(
+                        float(
+                            candidate[
+                                "signal_profit_factor_after_cost"
+                            ]
+                        ),
+                        10.0,
+                    )
+                )
+                if candidate_score > shadow_score:
+                    shadow_score = candidate_score
+                    shadow_model = model
+                    shadow_candidate = {
+                        **candidate,
+                        "model_name": name,
+                        "direction": direction,
+                        "selection_dataset": "validation_calibration",
+                        "test_used_for_selection": False,
+                    }
         except Exception as exc:
             skipped.append({"name": name, "reason": f"fit_failed: {exc}"})
     ranked.sort(key=lambda item: item["selection_score"], reverse=True)
-    return best_model, {
+    return best_model, shadow_model, {
         "direction": direction,
         "status": "trained" if best_model is not None else "skipped",
         "best_model": str(getattr(best_model, "name", type(best_model).__name__)) if best_model is not None else "",
@@ -799,6 +833,15 @@ def select_directional_model(
         "valid_positive_count": int(y_valid.sum()),
         "valid_negative_count": int((1 - y_valid).sum()),
         "valid_positive_rate": float(y_valid.mean()) if len(y_valid) else 0.0,
+        "shadow_candidate": shadow_candidate,
+        "shadow_policy": {
+            "min_signal_count": 8,
+            "min_profit_factor": 1.20,
+            "min_total_return": 0.0,
+            "requires_positive_expectancy": True,
+            "selection_dataset": "validation_calibration",
+            "test_used_for_selection": False,
+        },
     }
 
 
@@ -825,7 +868,7 @@ def train_directional_auxiliary_models(
     }
     for offset, direction in enumerate(["trade", "long", "short"], start=1):
         cost_buffer = float(base_backtest_cfg.fee_rate + base_backtest_cfg.slippage_rate + base_backtest_cfg.funding_rate_buffer)
-        model, direction_report = select_directional_model(
+        model, shadow_model, direction_report = select_directional_model(
             direction,
             train_df,
             valid_df,
@@ -856,6 +899,48 @@ def train_directional_auxiliary_models(
             direction_report["test_metrics"] = classification_metrics(y_test, test_prob)
             direction_report["test_data_usage"] = "final_metrics_only_after_auxiliary_selection"
             direction_report["test_used_for_selection"] = False
+        shadow_candidate = direction_report.get("shadow_candidate")
+        if shadow_model is not None and isinstance(shadow_candidate, dict):
+            shadow_key = f"shadow_direction_{direction}"
+            auxiliary_models[shadow_key] = shadow_model
+            auxiliary_metadata[shadow_key] = {
+                "direction": direction,
+                "target": str(
+                    direction_report.get(
+                        "target_col",
+                        "tradable_label",
+                    )
+                ),
+                "selected_model": str(
+                    shadow_candidate.get("model_name")
+                    or getattr(
+                        shadow_model,
+                        "name",
+                        type(shadow_model).__name__,
+                    )
+                ),
+                "selected_signal_threshold": float(
+                    shadow_candidate.get("threshold", 1.0)
+                ),
+                "signal_count": int(
+                    shadow_candidate.get("signal_count", 0)
+                ),
+                "signal_total_return_after_cost": float(
+                    shadow_candidate.get(
+                        "signal_total_return_after_cost",
+                        0.0,
+                    )
+                ),
+                "signal_profit_factor_after_cost": float(
+                    shadow_candidate.get(
+                        "signal_profit_factor_after_cost",
+                        0.0,
+                    )
+                ),
+                "selection_dataset": "validation_calibration",
+                "test_used_for_selection": False,
+                "mode": "shadow_paper_only",
+            }
         report["directions"][direction] = direction_report
     report["status"] = (
         "trained" if {"direction_trade", "direction_long", "direction_short"}.issubset(auxiliary_models) else "partial_or_skipped"

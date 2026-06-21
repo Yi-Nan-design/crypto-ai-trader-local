@@ -99,6 +99,16 @@ class TraderConfig:
     portfolio_paper_initial_balance: float = 10_000.0
     portfolio_paper_max_history: int = 2_000
     portfolio_require_complete_inputs: bool = True
+    shadow_learning_enabled: bool = True
+    shadow_min_signal_count: int = 8
+    shadow_min_profit_factor: float = 1.20
+    shadow_max_position_fraction: float = 0.05
+    shadow_leverage: int = 1
+    shadow_target_gross_exposure: float = 0.20
+    runner_max_model_trials: int = 4
+    runner_time_budget_minutes: float = 6.0
+    runner_rolling_folds: int = 1
+    runner_max_training_rows: int = 8_000
     portfolio_symbol_sectors: dict[str, str] = field(
         default_factory=lambda: {
             "BTCUSDT": "bitcoin",
