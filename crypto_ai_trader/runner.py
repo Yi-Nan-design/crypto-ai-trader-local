@@ -231,7 +231,7 @@ def runner_once(
             else f"portfolio_blocked_{portfolio_mark_reason}"
         ),
         expected_open_time=(
-            int(portfolio_mark["open_time"])
+            int(portfolio_mark.open_time)
             if portfolio_mark is not None
             else None
         ),
