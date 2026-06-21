@@ -1,0 +1,34 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Smoke Test",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "crypto_ai_trader.cli", "smoke"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Runner Once",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "crypto_ai_trader.runner", "once", "--symbols", "ETHUSDT", "BNBUSDT", "--interval", "5m", "--limit", "300"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Runner Status",
+      "type": "shell",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "crypto_ai_trader.runner", "status"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Control Panel",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\scripts\\start_control_panel.ps1"],
+      "problemMatcher": [],
+      "isBackground": true
+    }
+  ]
+}

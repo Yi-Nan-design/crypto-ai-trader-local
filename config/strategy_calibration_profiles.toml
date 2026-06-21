@@ -1,0 +1,456 @@
+schema_version = 1
+catalog_version = "2026-06-20-v1"
+compact_order = [
+  "micro_range_grid_long",
+  "micro_capital_preservation",
+  "platform_dual_trend_breakout",
+  "platform_short_breakdown_swing",
+  "platform_range_reversion_dual",
+  "trend_breakout_long_swing",
+  "event_momentum_breakout",
+  "short_breakdown_event_only",
+]
+
+[[profiles]]
+name = "micro_capital_preservation"
+[profiles.values]
+stop_loss = 0.008
+take_profit = 0.014
+use_atr_exits = false
+funding_rate_buffer = 0.0001
+min_atr_cost_multiplier = 2.0
+[profiles.min]
+max_position_fraction = 0.18
+risk_per_trade = 0.0035
+
+[[profiles]]
+name = "micro_range_grid_long"
+[profiles.values]
+stop_loss = 0.008
+take_profit = 0.014
+use_atr_exits = false
+funding_rate_buffer = 0.0001
+min_atr_cost_multiplier = 2.0
+strategy_archetype_policy = "range_grid_long_only"
+volatility_regime_policy = "all"
+[profiles.min]
+max_position_fraction = 0.18
+risk_per_trade = 0.0035
+[profiles.max]
+range_gate_max_efficiency = 0.18
+range_reversion_min_score = 0.08
+
+[[profiles]]
+name = "micro_balanced"
+[profiles.values]
+stop_loss = 0.012
+take_profit = 0.024
+use_atr_exits = false
+funding_rate_buffer = 0.0001
+min_atr_cost_multiplier = 2.0
+[profiles.min]
+max_position_fraction = 0.25
+risk_per_trade = 0.005
+
+[[profiles]]
+name = "micro_mean_reversion_quick"
+[profiles.values]
+stop_loss = 0.007
+take_profit = 0.012
+use_atr_exits = false
+funding_rate_buffer = 0.0001
+min_atr_cost_multiplier = 2.0
+[profiles.min]
+max_position_fraction = 0.20
+risk_per_trade = 0.003
+
+[[profiles]]
+name = "micro_momentum_runner"
+[profiles.values]
+stop_loss = 0.018
+take_profit = 0.040
+use_atr_exits = false
+funding_rate_buffer = 0.0001
+min_atr_cost_multiplier = 2.0
+[profiles.min]
+max_position_fraction = 0.22
+risk_per_trade = 0.005
+
+[[profiles]]
+name = "event_momentum_breakout"
+[profiles.values]
+stop_loss = 0.014
+take_profit = 0.034
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.4
+take_profit_atr_multiplier = 3.0
+min_exit_pct = 0.0035
+max_exit_pct = 0.050
+funding_rate_buffer = 0.00015
+min_atr_cost_multiplier = 2.4
+platform_event_gate_enabled = true
+platform_event_min_score = 0.70
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.006
+cooldown_loss_streak = 3
+cooldown_bars = 8
+strategy_archetype_policy = "trend_breakout_only"
+volatility_regime_policy = "not_low_vol"
+[profiles.min]
+max_position_fraction = 0.20
+risk_per_trade = 0.004
+min_confidence_gap = 0.025
+trend_gate_min_efficiency = 0.12
+[profiles.max]
+range_reversion_min_score = 0.10
+
+[[profiles]]
+name = "trend_breakout_long_swing"
+[profiles.values]
+stop_loss = 0.016
+take_profit = 0.038
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.5
+take_profit_atr_multiplier = 3.4
+min_exit_pct = 0.004
+max_exit_pct = 0.055
+funding_rate_buffer = 0.00015
+min_atr_cost_multiplier = 2.5
+platform_event_gate_enabled = true
+platform_event_min_score = 0.68
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.006
+cooldown_loss_streak = 3
+cooldown_bars = 10
+strategy_archetype_policy = "trend_breakout_long_only"
+volatility_regime_policy = "not_low_vol"
+[profiles.min]
+max_position_fraction = 0.20
+risk_per_trade = 0.004
+min_confidence_gap = 0.03
+trend_gate_min_efficiency = 0.12
+
+[[profiles]]
+name = "platform_dual_trend_breakout"
+[profiles.values]
+stop_loss = 0.012
+take_profit = 0.030
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.25
+take_profit_atr_multiplier = 3.0
+min_exit_pct = 0.0035
+max_exit_pct = 0.048
+funding_rate_buffer = 0.00018
+min_atr_cost_multiplier = 2.7
+platform_event_gate_enabled = true
+platform_event_min_score = 0.64
+market_structure_gate_enabled = true
+min_market_structure_score = 0.52
+crowding_filter_enabled = true
+max_crowding_risk = 0.72
+max_notional_exposure = 0.36
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.005
+cooldown_loss_streak = 2
+cooldown_bars = 12
+strategy_archetype_policy = "trend_breakout_only"
+volatility_regime_policy = "not_low_vol"
+[profiles.min]
+max_position_fraction = 0.18
+risk_per_trade = 0.0038
+min_confidence_gap = 0.035
+trend_gate_min_efficiency = 0.12
+
+[[profiles]]
+name = "platform_short_breakdown_swing"
+[profiles.values]
+stop_loss = 0.010
+take_profit = 0.026
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.15
+take_profit_atr_multiplier = 2.8
+min_exit_pct = 0.003
+max_exit_pct = 0.042
+funding_rate_buffer = 0.00022
+min_atr_cost_multiplier = 3.0
+platform_event_gate_enabled = true
+platform_event_min_score = 0.62
+market_structure_gate_enabled = true
+min_market_structure_score = 0.50
+crowding_filter_enabled = true
+max_crowding_risk = 0.68
+max_notional_exposure = 0.30
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.0045
+cooldown_loss_streak = 2
+cooldown_bars = 14
+strategy_archetype_policy = "trend_breakout_short_only"
+volatility_regime_policy = "not_low_vol"
+[profiles.min]
+max_position_fraction = 0.14
+risk_per_trade = 0.0032
+min_confidence_gap = 0.04
+trend_gate_min_efficiency = 0.13
+
+[[profiles]]
+name = "platform_range_reversion_dual"
+[profiles.values]
+stop_loss = 0.007
+take_profit = 0.015
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.05
+take_profit_atr_multiplier = 2.2
+min_exit_pct = 0.0028
+max_exit_pct = 0.034
+funding_rate_buffer = 0.00018
+min_atr_cost_multiplier = 2.6
+platform_event_gate_enabled = true
+platform_event_min_score = 0.66
+market_structure_gate_enabled = true
+min_market_structure_score = 0.50
+crowding_filter_enabled = true
+max_crowding_risk = 0.86
+max_notional_exposure = 0.28
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.004
+cooldown_loss_streak = 2
+cooldown_bars = 12
+strategy_archetype_policy = "range_grid_only"
+volatility_regime_policy = "mid_vol_only"
+[profiles.min]
+max_position_fraction = 0.14
+risk_per_trade = 0.0028
+min_confidence_gap = 0.035
+[profiles.max]
+range_gate_max_efficiency = 0.22
+range_reversion_min_score = 0.10
+
+[[profiles]]
+name = "event_grid_reversion"
+[profiles.values]
+stop_loss = 0.007
+take_profit = 0.012
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.1
+take_profit_atr_multiplier = 1.9
+min_exit_pct = 0.0028
+max_exit_pct = 0.030
+funding_rate_buffer = 0.00015
+min_atr_cost_multiplier = 2.2
+platform_event_gate_enabled = true
+platform_event_min_score = 0.76
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.005
+cooldown_loss_streak = 3
+cooldown_bars = 10
+strategy_archetype_policy = "range_grid_only"
+volatility_regime_policy = "tradable_vol"
+[profiles.min]
+max_position_fraction = 0.16
+risk_per_trade = 0.0028
+min_confidence_gap = 0.025
+[profiles.max]
+range_gate_max_efficiency = 0.20
+range_reversion_min_score = 0.12
+
+[[profiles]]
+name = "dynamic_grid_long_reversion"
+[profiles.values]
+stop_loss = 0.0065
+take_profit = 0.0135
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.0
+take_profit_atr_multiplier = 2.1
+min_exit_pct = 0.0028
+max_exit_pct = 0.032
+funding_rate_buffer = 0.00015
+min_atr_cost_multiplier = 2.4
+platform_event_gate_enabled = true
+platform_event_min_score = 0.72
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.0045
+cooldown_loss_streak = 2
+cooldown_bars = 12
+strategy_archetype_policy = "range_grid_long_only"
+volatility_regime_policy = "not_low_vol"
+[profiles.min]
+max_position_fraction = 0.14
+risk_per_trade = 0.0026
+min_confidence_gap = 0.03
+[profiles.max]
+range_gate_max_efficiency = 0.22
+range_reversion_min_score = 0.13
+
+[[profiles]]
+name = "asymmetric_long_event_mix"
+[profiles.values]
+stop_loss = 0.010
+take_profit = 0.022
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.25
+take_profit_atr_multiplier = 2.55
+min_exit_pct = 0.0032
+max_exit_pct = 0.042
+funding_rate_buffer = 0.00015
+min_atr_cost_multiplier = 2.4
+platform_event_gate_enabled = true
+platform_event_min_score = 0.70
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.005
+cooldown_loss_streak = 3
+cooldown_bars = 10
+strategy_archetype_policy = "range_or_trend_long_only"
+volatility_regime_policy = "not_low_vol"
+[profiles.min]
+max_position_fraction = 0.18
+risk_per_trade = 0.0035
+min_confidence_gap = 0.03
+trend_gate_min_efficiency = 0.13
+[profiles.max]
+range_gate_max_efficiency = 0.20
+range_reversion_min_score = 0.11
+
+[[profiles]]
+name = "short_breakdown_event_only"
+[profiles.values]
+stop_loss = 0.009
+take_profit = 0.020
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.1
+take_profit_atr_multiplier = 2.4
+min_exit_pct = 0.003
+max_exit_pct = 0.036
+funding_rate_buffer = 0.0002
+min_atr_cost_multiplier = 2.8
+platform_event_gate_enabled = true
+platform_event_min_score = 0.78
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.0045
+cooldown_loss_streak = 2
+cooldown_bars = 14
+strategy_archetype_policy = "trend_breakout_short_only"
+volatility_regime_policy = "high_vol_only"
+[profiles.min]
+max_position_fraction = 0.12
+risk_per_trade = 0.0028
+min_confidence_gap = 0.035
+trend_gate_min_efficiency = 0.14
+
+[[profiles]]
+name = "atr_capital_preservation"
+[profiles.values]
+stop_loss = 0.008
+take_profit = 0.014
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.2
+take_profit_atr_multiplier = 2.2
+min_exit_pct = 0.0035
+max_exit_pct = 0.035
+funding_rate_buffer = 0.00015
+min_atr_cost_multiplier = 2.2
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.005
+cooldown_loss_streak = 3
+cooldown_bars = 12
+[profiles.min]
+max_position_fraction = 0.18
+risk_per_trade = 0.0035
+
+[[profiles]]
+name = "atr_momentum_runner"
+[profiles.values]
+stop_loss = 0.014
+take_profit = 0.032
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.6
+take_profit_atr_multiplier = 3.2
+min_exit_pct = 0.004
+max_exit_pct = 0.055
+funding_rate_buffer = 0.00015
+min_atr_cost_multiplier = 2.2
+[profiles.min]
+max_position_fraction = 0.22
+risk_per_trade = 0.0045
+
+[[profiles]]
+name = "micro_range_grid_long_boost"
+[profiles.values]
+leverage = 2
+stop_loss = 0.008
+take_profit = 0.018
+use_atr_exits = false
+funding_rate_buffer = 0.00018
+volatility_target = 0.012
+min_volatility_scale = 0.55
+max_volatility_scale = 1.40
+min_atr_cost_multiplier = 2.5
+event_position_boost_enabled = true
+event_position_min_score = 0.55
+event_position_boost_strength = 0.90
+position_rebalance_band = 0.025
+max_position_fraction_step = 0.06
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.0045
+cooldown_loss_streak = 2
+cooldown_bars = 12
+strategy_archetype_policy = "range_grid_long_only"
+volatility_regime_policy = "tradable_vol"
+[profiles.min]
+max_position_fraction = 0.24
+risk_per_trade = 0.005
+min_confidence_gap = 0.03
+[profiles.max]
+min_position_scale = 0.50
+range_gate_max_efficiency = 0.20
+range_reversion_min_score = 0.11
+
+[[profiles]]
+name = "trend_breakout_long_boost"
+[profiles.values]
+leverage = 2
+stop_loss = 0.010
+take_profit = 0.024
+use_atr_exits = true
+stop_loss_atr_multiplier = 1.25
+take_profit_atr_multiplier = 3.2
+min_exit_pct = 0.0035
+max_exit_pct = 0.050
+funding_rate_buffer = 0.0002
+min_atr_cost_multiplier = 2.5
+event_position_boost_enabled = true
+event_position_min_score = 0.58
+event_position_boost_strength = 0.80
+position_rebalance_band = 0.025
+max_position_fraction_step = 0.06
+platform_event_gate_enabled = true
+platform_event_min_score = 0.70
+drawdown_cooldown_enabled = true
+cooldown_drawdown = 0.005
+cooldown_loss_streak = 2
+cooldown_bars = 10
+strategy_archetype_policy = "trend_breakout_long_only"
+volatility_regime_policy = "not_low_vol"
+[profiles.min]
+max_position_fraction = 0.24
+risk_per_trade = 0.0045
+min_confidence_gap = 0.03
+trend_gate_min_efficiency = 0.12
+[profiles.max]
+min_position_scale = 0.55
+
+[[profiles]]
+name = "base_small_account"
+base = [
+  "max_position_fraction",
+  "stop_loss",
+  "take_profit",
+  "use_atr_exits",
+  "stop_loss_atr_multiplier",
+  "take_profit_atr_multiplier",
+  "min_exit_pct",
+  "max_exit_pct",
+  "risk_per_trade",
+  "funding_rate_buffer",
+  "min_atr_cost_multiplier",
+  "volatility_regime_policy",
+]

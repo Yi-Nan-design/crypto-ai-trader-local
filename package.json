@@ -1,0 +1,92 @@
+{
+  "name": "crypto-ai-trader-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "author": "Local",
+  "description": "Electron desktop shell for the local Crypto AI Trader dashboard.",
+  "main": "desktop/electron/main.js",
+  "scripts": {
+    "desktop": "electron .",
+    "start:desktop": "electron .",
+    "build:desktop": "electron-builder --win dir --x64",
+    "build:desktop:installer": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "42.4.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "local.crypto-ai-trader.desktop",
+    "productName": "Crypto AI Trader",
+    "directories": {
+      "output": "dist-desktop"
+    },
+    "asar": true,
+    "files": [
+      "desktop/electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".venv",
+        "to": ".venv",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!**/*.pyo",
+          "!**/.pytest_cache/**",
+          "!**/pip/**",
+          "!**/wheel/**"
+        ]
+      },
+      {
+        "from": "crypto_ai_trader",
+        "to": "crypto_ai_trader",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "web",
+        "to": "web",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "docs",
+        "to": "docs",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "scripts",
+        "to": "scripts",
+        "filter": [
+          "**/*.ps1",
+          "**/*.cmd",
+          "**/*.vbs"
+        ]
+      },
+      {
+        "from": "config.default.json",
+        "to": "config.default.json"
+      },
+      {
+        "from": "requirements.txt",
+        "to": "requirements.txt"
+      }
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        "dir",
+        "nsis"
+      ]
+    }
+  }
+}

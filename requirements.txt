@@ -1,0 +1,9 @@
+numpy>=1.26
+pandas>=2.2
+scikit-learn>=1.5
+joblib>=1.4
+requests>=2.32
+lightgbm>=4.5
+xgboost>=2.1
+catboost>=1.2
+optuna>=4.0

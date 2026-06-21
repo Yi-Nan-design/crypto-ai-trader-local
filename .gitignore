@@ -1,0 +1,48 @@
+.venv/
+node_modules/
+tools/
+dist/
+dist-desktop/
+release/
+exports/
+__pycache__/
+*.pyc
+.cache/
+logs/
+downloads/
+
+# Local training and runtime artifacts
+data/
+models/
+reports/
+state/
+*.pkl
+*.joblib
+*.onnx
+*.pt
+*.pth
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+config.json
+config.local.json
+secrets.json
+credentials.json
+*.pem
+*.key
+
+# Generated machine-specific launchers
+scripts/runner_task.cmd
+
+# Test and editor caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+.coverage
+
+# OS metadata
+Thumbs.db
+Desktop.ini

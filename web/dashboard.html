@@ -1,0 +1,1737 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crypto AI Trader 控制台</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --ink: #17202a;
+      --muted: #627083;
+      --line: #d7dee8;
+      --teal: #0f8b8d;
+      --blue: #2f6fed;
+      --amber: #c88400;
+      --green: #1f8a4c;
+      --red: #c33d4b;
+      --shadow: 0 10px 26px rgba(23, 32, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    header {
+      background: #101820;
+      color: #fff;
+      border-bottom: 4px solid var(--teal);
+      padding: 18px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .header-meta {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      color: #dfe5ee;
+      font-size: 13px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .dot.running, .dot.waiting { background: var(--green); }
+    .dot.paused { background: var(--amber); }
+    .dot.error, .dot.offline, .dot.stopped { background: var(--red); }
+
+    main {
+      width: min(1440px, calc(100vw - 32px));
+      margin: 22px auto 32px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+      gap: 16px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .wide { grid-column: 1 / -1; }
+
+    h2 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.25;
+    }
+
+    label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 7px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr 0.7fr 0.8fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .symbol-row,
+    .interval-row,
+    .button-row,
+    .chart-toolbar,
+    .legend,
+    .quick-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .choice input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .choice span,
+    .interval-button,
+    button,
+    select {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      padding: 8px 12px;
+      background: #fbfcfe;
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .choice span,
+    .interval-button,
+    button,
+    select {
+      cursor: pointer;
+    }
+
+    .choice input:checked + span,
+    .interval-button.active {
+      border-color: var(--teal);
+      background: #e8f5f5;
+      color: #075f61;
+      font-weight: 700;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 7px 10px;
+      font-size: 14px;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    button {
+      font-weight: 700;
+      min-width: 72px;
+      user-select: none;
+    }
+
+    button.primary {
+      background: var(--teal);
+      border-color: var(--teal);
+      color: #fff;
+    }
+
+    button.pause {
+      background: #fff7e6;
+      border-color: #e7bd63;
+      color: #7a5200;
+    }
+
+    button.stop {
+      background: #fff0f2;
+      border-color: #df9aa2;
+      color: #9c2030;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .message-line {
+      margin-top: 12px;
+      min-height: 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .desktop-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .task-panel,
+    .locked-panel {
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 100%;
+    }
+
+    .task-panel {
+      border: 1px solid var(--line);
+      background: #fbfcfe;
+    }
+
+    .locked-panel {
+      border: 1px solid #df9aa2;
+      background: #fff6f7;
+    }
+
+    .task-panel h3,
+    .locked-panel h3 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+
+    .task-panel p,
+    .locked-panel p {
+      margin: 8px 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .task-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+      max-height: 220px;
+      overflow: auto;
+    }
+
+    .task-item {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 9px 10px;
+      background: #fff;
+      font-size: 13px;
+    }
+
+    .task-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-weight: 700;
+    }
+
+    .task-meta {
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .task-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .task-actions button {
+      padding: 7px 10px;
+      font-size: 12px;
+    }
+
+    .task-log {
+      margin-top: 8px;
+      max-height: 160px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #101820;
+      color: #e8eef6;
+      padding: 8px;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .status-pill {
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      padding: 2px 8px;
+      font-size: 12px;
+      color: var(--muted);
+      background: #f4f7fb;
+    }
+
+    .status-pill.running {
+      border-color: #7ac8ca;
+      color: #0f6f71;
+      background: #e9fbfb;
+    }
+
+    .status-pill.failed,
+    .status-pill.cancelled {
+      border-color: #df9aa2;
+      color: #9c2030;
+      background: #fff0f2;
+    }
+
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      min-height: 430px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      overflow: hidden;
+    }
+
+    #decisionCanvas {
+      display: block;
+      width: 100%;
+      height: 430px;
+    }
+
+    .chart-meta {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .legend {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 22px;
+    }
+
+    .marker {
+      width: 10px;
+      height: 10px;
+      display: inline-block;
+      border-radius: 2px;
+    }
+
+    .marker.buy { background: var(--green); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+    .marker.sell { background: var(--red); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+    .marker.exit { background: var(--amber); }
+    .marker.price { background: var(--blue); border-radius: 999px; }
+    .marker.prob { background: var(--teal); border-radius: 999px; }
+
+    .progress-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .phase-title {
+      font-size: 20px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .phase-message {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .percent {
+      min-width: 96px;
+      text-align: right;
+      font-size: 34px;
+      font-weight: 800;
+      color: var(--teal);
+    }
+
+    .bar {
+      height: 14px;
+      border-radius: 999px;
+      background: #e8edf4;
+      border: 1px solid var(--line);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--teal), var(--blue), var(--amber));
+      transition: width 260ms ease;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 11px;
+      min-height: 72px;
+      background: #fbfcfe;
+    }
+
+    .stat label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .stat strong {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 18px;
+    }
+
+    .runner-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      padding: 9px 8px;
+      vertical-align: middle;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 12px;
+      background: #fbfcfe;
+    }
+
+    .events {
+      display: grid;
+      gap: 9px;
+      max-height: 420px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .event {
+      border-left: 4px solid var(--teal);
+      border-top: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: #fbfcfe;
+    }
+
+    .event.error { border-left-color: var(--red); }
+    .event.finish { border-left-color: var(--green); }
+
+    .event-time {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 14px 0;
+    }
+
+    .positive { color: var(--green); }
+    .negative { color: var(--red); }
+
+    @media (max-width: 980px) {
+      main { grid-template-columns: 1fr; width: min(100vw - 20px, 780px); }
+      .controls { grid-template-columns: 1fr 1fr; }
+      .button-row { grid-column: 1 / -1; }
+      .stats, .chart-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 560px) {
+      header { padding: 16px; }
+      h1 { font-size: 21px; }
+      .controls, .runner-grid, .stats, .chart-meta, .desktop-grid { grid-template-columns: 1fr; }
+      .progress-top { flex-direction: column; }
+      .percent { text-align: left; }
+      button { flex: 1 1 44%; }
+      #decisionCanvas { height: 360px; }
+      .chart-wrap { min-height: 360px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Crypto AI Trader 控制台</h1>
+    <div class="header-meta">
+      <span class="badge"><span id="runnerDot" class="dot"></span><span id="runnerStatus">未启动</span></span>
+      <span class="badge">实盘：关闭</span>
+      <span id="updatedText">等待数据</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="wide">
+      <h2>Runner 控制</h2>
+      <div class="controls" style="margin-top:14px;">
+        <div>
+          <label>币种</label>
+          <div id="symbols" class="symbol-row"></div>
+        </div>
+        <div>
+          <label>周期</label>
+          <div id="intervals" class="interval-row"></div>
+        </div>
+        <div>
+          <label for="limitInput">K 线数量</label>
+          <input id="limitInput" type="number" min="100" max="2000" step="100">
+        </div>
+        <div>
+          <label for="trainEveryInput">训练间隔秒</label>
+          <input id="trainEveryInput" type="number" min="60" max="86400" step="60">
+        </div>
+        <div class="button-row">
+          <button id="startBtn" class="primary">开始</button>
+          <button id="resumeBtn">恢复</button>
+          <button id="pauseBtn" class="pause">暂停</button>
+          <button id="stopBtn" class="stop">停止</button>
+          <button id="refreshStatusBtn">刷新状态</button>
+        </div>
+      </div>
+      <div id="actionMessage" class="message-line"></div>
+    </section>
+
+    <section class="wide">
+      <div class="section-head">
+        <h2>桌面工具</h2>
+        <div class="quick-actions">
+          <button id="modelOptimizeBtn" class="primary">一键准确率优化</button>
+          <button id="scheduledOptimizeBtn">持续优化一次</button>
+          <button id="liveTrainBtn">一键实时训练</button>
+          <button id="dataMaintenanceBtn">整理训练数据</button>
+          <button id="cacheDownloadBtn">无 VPN 缓存检查</button>
+          <button id="binanceCheckBtn">验证币安下载</button>
+          <button id="memoryUpdateBtn">更新策略记忆</button>
+          <button id="latestOptimizeBtn">刷新最新优化</button>
+          <button id="exportPortableBtn">导出便携包</button>
+          <button id="openReportsBtn">打开报告目录</button>
+        </div>
+      </div>
+      <div class="desktop-grid">
+        <div class="task-panel">
+          <h3>后台任务</h3>
+          <p id="desktopMessage">等待桌面任务。</p>
+          <div class="stats">
+            <div class="stat"><label>最新优化模型</label><strong id="latestOptModel">-</strong></div>
+            <div class="stat"><label>准确率 / AUC</label><strong id="latestOptAccuracy">-</strong></div>
+            <div class="stat"><label>收益 / 回撤</label><strong id="latestOptReturn">-</strong></div>
+            <div class="stat"><label>报告时间</label><strong id="latestOptTime">-</strong></div>
+            <div class="stat"><label>币安下载</label><strong id="binanceDownloadStatus">未验证</strong></div>
+            <div class="stat"><label>策略记忆</label><strong id="memoryStatus">未生成</strong></div>
+            <div class="stat"><label>持续优化</label><strong id="scheduledOptStatus">未运行</strong></div>
+            <div class="stat"><label>模型监控</label><strong id="monitoringStatus">未生成</strong></div>
+            <div class="stat"><label>数据整理</label><strong id="dataMaintenanceStatus">未运行</strong></div>
+            <div class="stat"><label>组合计划</label><strong id="portfolioStatus">未生成</strong></div>
+          </div>
+          <div id="taskList" class="task-list"></div>
+        </div>
+        <div class="locked-panel">
+          <h3>实盘交易</h3>
+          <p>当前锁死：不接 API Key，不下单，不启用真实合约交易。这里只保留后续测试网阶段的占位。</p>
+          <div class="button-row">
+            <button disabled>API Key 禁用</button>
+            <button disabled>实盘开关关闭</button>
+            <button disabled>下单禁用</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="wide">
+      <div class="section-head">
+        <h2>实时决策图</h2>
+        <div class="chart-toolbar">
+          <label for="chartSymbolSelect" style="margin:0;">图表币种</label>
+          <select id="chartSymbolSelect">
+            <option value="auto">自动最佳</option>
+          </select>
+          <span id="chartRefreshText" class="message-line" style="margin:0;">等待图表数据</span>
+        </div>
+      </div>
+      <div class="chart-meta">
+        <div class="stat"><label>当前决策</label><strong id="chartDecision">-</strong></div>
+        <div class="stat"><label>上涨概率</label><strong id="chartProb">-</strong></div>
+        <div class="stat"><label>未来5分钟</label><strong id="chartProb5m">-</strong></div>
+        <div class="stat"><label>未来10分钟</label><strong id="chartProb10m">-</strong></div>
+        <div class="stat"><label>模型</label><strong id="chartModel">-</strong></div>
+        <div class="stat"><label>价格</label><strong id="chartPrice">-</strong></div>
+        <div class="stat"><label>风险决策</label><strong id="chartRisk">-</strong></div>
+        <div class="stat"><label>手续费 / 滑点 / 资金费</label><strong id="chartCosts">-</strong></div>
+        <div class="stat"><label>成交质量</label><strong id="chartExecution">-</strong></div>
+        <div class="stat"><label>交易所可用性</label><strong id="chartExchange">-</strong></div>
+        <div class="stat"><label>回测收益 / 回撤</label><strong id="chartReturn">-</strong></div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="decisionCanvas" aria-label="实时决策价格图"></canvas>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="marker price"></span>价格</span>
+        <span class="legend-item"><span class="marker prob"></span>上涨概率</span>
+        <span class="legend-item"><span class="marker buy"></span>买点/做多</span>
+        <span class="legend-item"><span class="marker sell"></span>卖点/做空</span>
+        <span class="legend-item"><span class="marker exit"></span>平仓</span>
+        <span>图中信号来自本地模型回测决策，不是实盘订单。</span>
+      </div>
+    </section>
+
+    <section>
+      <h2 style="margin-bottom:14px;">实时进度</h2>
+      <div class="progress-top">
+        <div>
+          <div id="phaseTitle" class="phase-title">等待本地任务</div>
+          <div id="messageText" class="phase-message">启动 runner 后这里会更新。</div>
+        </div>
+        <div id="percentText" class="percent">0%</div>
+      </div>
+      <div class="bar"><div id="barFill" class="bar-fill"></div></div>
+      <div class="stats">
+        <div class="stat"><label>当前币种</label><strong id="symbolText">-</strong></div>
+        <div class="stat"><label>阶段</label><strong id="stepText">0 / 1</strong></div>
+        <div class="stat"><label>模型</label><strong id="modelText">-</strong></div>
+        <div class="stat"><label>收益 / 回撤</label><strong id="returnText">-</strong></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 style="margin-bottom:14px;">Runner 状态</h2>
+      <div class="runner-grid">
+        <div class="stat"><label>进程</label><strong id="processText">-</strong></div>
+        <div class="stat"><label>控制命令</label><strong id="controlText">-</strong></div>
+        <div class="stat"><label>周期</label><strong id="runnerIntervalText">-</strong></div>
+        <div class="stat"><label>下次训练</label><strong id="nextTrainText">-</strong></div>
+      </div>
+      <div id="rankedWrap" style="margin-top: 12px;"></div>
+    </section>
+
+    <section>
+      <h2 style="margin-bottom:14px;">回测摘要</h2>
+      <div id="backtestWrap"></div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>组合计划</h2>
+        <span id="portfolioRefreshText" class="message-line" style="margin:0;">等待 runner 生成</span>
+      </div>
+      <div class="runner-grid">
+        <div class="stat"><label>总敞口</label><strong id="portfolioGross">-</strong></div>
+        <div class="stat"><label>净敞口</label><strong id="portfolioNet">-</strong></div>
+        <div class="stat"><label>风险级别</label><strong id="portfolioRisk">-</strong></div>
+        <div class="stat"><label>相关簇</label><strong id="portfolioClusters">-</strong></div>
+        <div class="stat"><label>历史 ES / 上限</label><strong id="portfolioCvar">-</strong></div>
+        <div class="stat"><label>Paper 权益 / 收益</label><strong id="portfolioPaperEquity">-</strong></div>
+        <div class="stat"><label>Paper 回撤 / 日收益</label><strong id="portfolioPaperRisk">-</strong></div>
+        <div class="stat"><label>账本状态</label><strong id="portfolioPaperState">-</strong></div>
+      </div>
+      <div id="portfolioWeightsWrap" style="margin-top:12px;"></div>
+    </section>
+
+    <section>
+      <h2 style="margin-bottom:14px;">最近事件</h2>
+      <div id="events" class="events"></div>
+    </section>
+
+    <section>
+      <h2 style="margin-bottom:14px;">训练摘要</h2>
+      <div id="trainingWrap"></div>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const state = {
+      config: null,
+      interval: "5m",
+      busy: false,
+      desktopBusy: false,
+      chartData: null,
+      progressServerPercent: 0,
+      displayedProgressPercent: 0,
+      progressStatus: "idle",
+      tasksHaveActive: false,
+      activeTaskKinds: new Set(),
+      taskLogs: new Map(),
+      refreshing: new Set()
+    };
+
+    const TASK_LABELS = {
+      runner: "Runner",
+      "model-optimize": "准确率优化",
+      "scheduled-optimize": "持续优化",
+      "live-train": "实时训练",
+      "data-maintenance": "数据整理",
+      "download-cache": "无 VPN 缓存检查",
+      "memory-update": "策略记忆",
+      "ai-optimize": "AI 优化",
+      cycle: "完整循环",
+      doctor: "环境检查",
+      "export-portable": "导出便携包"
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function fmtPct(value) {
+      if (value === undefined || value === null || value === "") return "-";
+      const num = Number(value || 0);
+      return `${(num * 100).toFixed(2)}%`;
+    }
+
+    function fmtNum(value, digits = 4) {
+      const num = Number(value || 0);
+      return Number.isFinite(num) ? num.toFixed(digits) : "-";
+    }
+
+    function fmtPrice(value) {
+      const num = Number(value || 0);
+      if (!Number.isFinite(num)) return "-";
+      if (num >= 1000) return num.toFixed(2);
+      if (num >= 10) return num.toFixed(3);
+      return num.toFixed(5);
+    }
+
+    function signedClass(value) {
+      return Number(value || 0) >= 0 ? "positive" : "negative";
+    }
+
+    function fmtDateTime(value) {
+      if (value === undefined || value === null || value === "") return "-";
+      const parsed = typeof value === "number" ? new Date(value) : new Date(String(value));
+      if (Number.isNaN(parsed.getTime())) return String(value);
+      return parsed.toLocaleString("zh-CN", {
+        timeZone: "Asia/Shanghai",
+        hour12: false,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    }
+
+    function fmtTime(epochSeconds) {
+      const value = Number(epochSeconds || 0);
+      if (!value) return "-";
+      return fmtDateTime(value * 1000);
+    }
+
+    async function fetchJson(url, options = {}) {
+      let res;
+      try {
+        res = await fetch(url, { cache: "no-store", ...options });
+      } catch (err) {
+        throw new Error(`本地服务连接失败，请关闭并重新打开桌面控制器 (${err.message || err})`);
+      }
+      const data = await res.json();
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || data.message || url);
+      }
+      return data;
+    }
+
+    function renderConfig(config) {
+      state.config = config;
+      state.interval = config.default_interval || "5m";
+      $("limitInput").value = config.default_limit || 800;
+      $("trainEveryInput").value = config.default_train_every_seconds || 900;
+
+      const defaults = new Set(config.default_runner_symbols || []);
+      $("symbols").innerHTML = (config.symbols || []).map((symbol) => `
+        <label class="choice">
+          <input type="checkbox" value="${symbol}" ${defaults.has(symbol) ? "checked" : ""}>
+          <span>${symbol}</span>
+        </label>
+      `).join("");
+
+      $("intervals").innerHTML = (config.intervals || ["5m"]).map((interval) => `
+        <button type="button" class="interval-button ${interval === state.interval ? "active" : ""}" data-interval="${interval}">${interval}</button>
+      `).join("");
+
+      $("chartSymbolSelect").innerHTML = `
+        <option value="auto">自动最佳</option>
+        ${(config.symbols || []).map((symbol) => `<option value="${symbol}">${symbol}</option>`).join("")}
+      `;
+
+      document.querySelectorAll(".interval-button").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.interval = button.dataset.interval;
+          document.querySelectorAll(".interval-button").forEach((item) => item.classList.remove("active"));
+          button.classList.add("active");
+        });
+      });
+      $("chartSymbolSelect").addEventListener("change", refreshChart);
+    }
+
+    function selectedSymbols() {
+      return [...document.querySelectorAll("#symbols input:checked")].map((input) => input.value);
+    }
+
+    function runnerPayload() {
+      return {
+        symbols: selectedSymbols(),
+        interval: state.interval,
+        limit: Number($("limitInput").value || 800),
+        train_every_seconds: Number($("trainEveryInput").value || 900)
+      };
+    }
+
+    function setBusy(value) {
+      state.busy = value;
+      ["startBtn", "resumeBtn", "pauseBtn", "stopBtn", "refreshStatusBtn"].forEach((id) => $(id).disabled = value);
+    }
+
+    function setDesktopBusy(value) {
+      state.desktopBusy = value;
+      updateDesktopButtons();
+    }
+
+    function updateDesktopButtons() {
+      const active = state.activeTaskKinds;
+      $("modelOptimizeBtn").disabled = state.desktopBusy || active.has("model-optimize");
+      $("modelOptimizeBtn").textContent = active.has("model-optimize") ? "准确率优化运行中" : "一键准确率优化";
+      $("scheduledOptimizeBtn").disabled = state.desktopBusy || active.has("scheduled-optimize");
+      $("scheduledOptimizeBtn").textContent = active.has("scheduled-optimize") ? "持续优化运行中" : "持续优化一次";
+      $("liveTrainBtn").disabled = state.desktopBusy || active.has("live-train");
+      $("liveTrainBtn").textContent = active.has("live-train") ? "实时训练运行中" : "一键实时训练";
+      $("dataMaintenanceBtn").disabled = state.desktopBusy || active.has("data-maintenance");
+      $("dataMaintenanceBtn").textContent = active.has("data-maintenance") ? "数据整理运行中" : "整理训练数据";
+      $("cacheDownloadBtn").disabled = state.desktopBusy || active.has("download-cache");
+      $("cacheDownloadBtn").textContent = active.has("download-cache") ? "缓存检查运行中" : "无 VPN 缓存检查";
+      $("binanceCheckBtn").disabled = state.desktopBusy;
+      $("memoryUpdateBtn").disabled = state.desktopBusy || active.has("memory-update");
+      $("memoryUpdateBtn").textContent = active.has("memory-update") ? "策略记忆更新中" : "更新策略记忆";
+      $("exportPortableBtn").disabled = state.desktopBusy || active.has("export-portable");
+      $("exportPortableBtn").textContent = active.has("export-portable") ? "正在导出便携包" : "导出便携包";
+      $("latestOptimizeBtn").disabled = state.desktopBusy;
+      $("openReportsBtn").disabled = state.desktopBusy;
+    }
+
+    async function runnerAction(path, body = {}) {
+      setBusy(true);
+      $("actionMessage").textContent = "正在发送指令...";
+      try {
+        const data = await fetchJson(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        $("actionMessage").textContent = data.message || "指令已发送";
+        await refreshAll();
+      } catch (err) {
+        $("actionMessage").textContent = `失败：${err.message}`;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function desktopSymbols() {
+      const selected = selectedSymbols();
+      return selected.length ? selected : (state.config?.default_runner_symbols || ["ETHUSDT", "BNBUSDT"]);
+    }
+
+    function desktopIntervals() {
+      return [...new Set([state.interval || "5m", "15m"])];
+    }
+
+    async function startDesktopTask(kind, params = {}) {
+      setDesktopBusy(true);
+      $("desktopMessage").textContent = `正在启动 ${TASK_LABELS[kind] || kind}：${JSON.stringify(params)}`;
+      try {
+        const data = await fetchJson("/api/tasks/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind, params })
+        });
+        $("desktopMessage").textContent = `已启动 ${TASK_LABELS[kind] || kind}: ${data.task?.task_id || ""}`;
+        await refreshAll();
+      } catch (err) {
+        $("desktopMessage").textContent = `任务失败：${err.message}`;
+      } finally {
+        setDesktopBusy(false);
+      }
+    }
+
+    async function exportPortable() {
+      setDesktopBusy(true);
+      $("desktopMessage").textContent = "正在启动便携包导出...";
+      try {
+        const data = await fetchJson("/api/export/portable", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        });
+        $("desktopMessage").textContent = `便携包导出任务已启动：${data.task?.task_id || ""}`;
+        await refreshAll();
+      } catch (err) {
+        $("desktopMessage").textContent = `导出失败：${err.message}`;
+      } finally {
+        setDesktopBusy(false);
+      }
+    }
+
+    async function checkBinanceDownload() {
+      setDesktopBusy(true);
+      $("binanceDownloadStatus").textContent = "验证中";
+      $("desktopMessage").textContent = "正在验证 Binance 历史归档和实时 K 线下载...";
+      try {
+        const symbol = desktopSymbols()[0] || "BNBUSDT";
+        const interval = state.interval || "1h";
+        const query = new URLSearchParams({ symbol, interval, period: "2024-01" });
+        const data = await fetchJson(`/api/binance/download-check?${query.toString()}`);
+        const statusText = data.can_download ? "可下载" : "不可下载";
+        const parts = [
+          `历史:${data.historical_archive_ok ? "可用" : "失败"}`,
+          `实时:${data.realtime_rest_ok ? "可用" : "失败"}`
+        ];
+        $("binanceDownloadStatus").textContent = `${statusText} ${parts.join(" / ")}`;
+        $("desktopMessage").textContent = `${data.message} ${data.proxy ? `代理：${data.proxy}` : "未使用代理"}`;
+      } catch (err) {
+        $("binanceDownloadStatus").textContent = "验证失败";
+        $("desktopMessage").textContent = `币安下载验证失败：${err.message}`;
+      } finally {
+        setDesktopBusy(false);
+      }
+    }
+
+    async function openPath(kind) {
+      try {
+        await fetchJson("/api/system/open-path", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind })
+        });
+      } catch (err) {
+        $("desktopMessage").textContent = `打开目录失败：${err.message}`;
+      }
+    }
+
+    function renderRunner(data) {
+      const status = data.effective_status || data.status || "not_started";
+      $("runnerDot").className = `dot ${status}`;
+      $("runnerStatus").textContent = status;
+      $("processText").textContent = data.process_running ? `运行中 ${data.pid || ""}` : "未运行";
+      $("controlText").textContent = data.control_command || "-";
+      $("runnerIntervalText").textContent = data.interval || "-";
+      $("nextTrainText").textContent = fmtTime(data.next_train_epoch);
+      if (!state.busy) {
+        const processRunning = Boolean(data.process_running);
+        const paused = status === "paused" || data.control_command === "pause";
+        $("startBtn").disabled = processRunning;
+        $("resumeBtn").disabled = !processRunning || !paused;
+        $("pauseBtn").disabled = !processRunning || paused;
+        $("stopBtn").disabled = !processRunning;
+      }
+
+      const ranked = data.latest_ranked || [];
+      $("rankedWrap").innerHTML = ranked.length ? `
+        <table>
+          <thead><tr><th>候选</th><th>模型</th><th>上涨概率</th><th>5分钟</th><th>10分钟</th><th>风险</th><th>收益</th><th>回撤</th></tr></thead>
+          <tbody>
+            ${ranked.map((item) => `
+              <tr>
+                <td>${item.symbol}</td>
+                <td>${item.model_name}</td>
+                <td>${fmtPct(item.latest_up_probability)}</td>
+                <td>${fmtPct(item.latest_horizon_probabilities?.next_5m)}</td>
+                <td>${fmtPct(item.latest_horizon_probabilities?.next_10m)}</td>
+                <td title="${item.latest_risk_decision?.reason || "旧报告无风险数据"}">${item.latest_risk_decision ? `${item.latest_risk_decision.allow_trade ? "允许" : "否决"} / ${item.latest_risk_decision.risk_level || "-"}` : "-"}</td>
+                <td class="${signedClass(item.total_return)}">${fmtPct(item.total_return)}</td>
+                <td class="${signedClass(item.max_drawdown)}">${fmtPct(item.max_drawdown)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : `<div class="empty">暂无实时训练结果</div>`;
+    }
+
+    function renderProgress(data) {
+      const percent = Number(data.percent || 0);
+      state.progressServerPercent = Math.max(0, Math.min(percent, 100));
+      state.progressStatus = data.status || "idle";
+      if (state.displayedProgressPercent > state.progressServerPercent + 8 || state.progressStatus !== "running") {
+        state.displayedProgressPercent = state.progressServerPercent;
+      }
+      $("phaseTitle").textContent = data.title || "Crypto AI Trader";
+      $("messageText").textContent = data.message || "";
+      renderProgressBar();
+      $("updatedText").textContent = data.updated_beijing || data.updated_utc ? `更新 ${fmtDateTime(data.updated_beijing || data.updated_utc)}` : "等待数据";
+      $("symbolText").textContent = data.current_symbol || "-";
+      $("stepText").textContent = `${data.current_step || 0} / ${data.total_steps || 1}`;
+      $("modelText").textContent = data.metrics?.model_name || "-";
+
+      const ret = data.metrics?.total_return;
+      const dd = data.metrics?.max_drawdown;
+      $("returnText").innerHTML = ret === undefined ? "-" : `<span class="${signedClass(ret)}">${fmtPct(ret)}</span> / <span class="${signedClass(dd)}">${fmtPct(dd)}</span>`;
+
+      const events = [...(data.events || [])].reverse().slice(0, 36);
+      $("events").innerHTML = events.length ? events.map((item) => `
+        <div class="event ${item.type || ""}">
+          <div class="event-time">${fmtDateTime(item.time_beijing || item.time)}${item.symbol ? " | " + item.symbol : ""}</div>
+          <div>${item.message || ""}</div>
+        </div>
+      `).join("") : `<div class="empty">暂无事件</div>`;
+    }
+
+    function renderProgressBar() {
+      const target = state.progressServerPercent;
+      if (state.progressStatus === "running") {
+        if (state.displayedProgressPercent < target) {
+          const gap = target - state.displayedProgressPercent;
+          state.displayedProgressPercent = Math.min(target, state.displayedProgressPercent + Math.max(0.6, gap * 0.35));
+        } else {
+          state.displayedProgressPercent = Math.min(99, state.displayedProgressPercent + 0.35);
+        }
+      } else {
+        state.displayedProgressPercent = target;
+      }
+      $("percentText").textContent = `${state.displayedProgressPercent.toFixed(0)}%`;
+      $("barFill").style.width = `${Math.max(0, Math.min(state.displayedProgressPercent, 100))}%`;
+    }
+
+    function renderReports(data) {
+      const backtests = data.backtests || [];
+      $("backtestWrap").innerHTML = backtests.length ? `
+        <table>
+          <thead><tr><th>名称</th><th>收益</th><th>回撤</th><th>交易</th><th>胜率</th></tr></thead>
+          <tbody>
+            ${backtests.slice().reverse().map((item) => `
+              <tr>
+                <td>${item.name}</td>
+                <td class="${signedClass(item.return)}">${fmtPct(item.return)}</td>
+                <td class="${signedClass(item.max_drawdown)}">${fmtPct(item.max_drawdown)}</td>
+                <td>${item.trades}</td>
+                <td>${fmtPct(item.win_rate)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : `<div class="empty">暂无回测报告</div>`;
+
+      const training = data.training || [];
+      $("trainingWrap").innerHTML = training.length ? `
+        <table>
+          <thead><tr><th>币种</th><th>模型</th><th>样本</th><th>准确率</th><th>Loss</th></tr></thead>
+          <tbody>
+            ${training.slice().reverse().map((item) => `
+              <tr>
+                <td>${item.symbol} ${item.interval}</td>
+                <td>${item.model}</td>
+                <td>${item.rows}</td>
+                <td>${fmtPct(item.accuracy)}</td>
+                <td>${fmtNum(item.log_loss)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : `<div class="empty">暂无训练报告</div>`;
+    }
+
+    function renderTasks(data) {
+      const tasks = (data.items || []).slice().reverse().slice(0, 8);
+      state.tasksHaveActive = tasks.some((task) => task.status === "running");
+      state.activeTaskKinds = new Set(tasks.filter((task) => task.status === "running").map((task) => task.kind));
+      updateDesktopButtons();
+      $("taskList").innerHTML = tasks.length ? tasks.map((task) => `
+        <div class="task-item" data-task-id="${escapeHtml(task.task_id || "")}">
+          <div class="task-title">
+            <span>${escapeHtml(TASK_LABELS[task.kind] || task.kind || "-")}</span>
+            <span class="status-pill ${escapeHtml(task.status || "")}">${escapeHtml(task.status || "-")}</span>
+          </div>
+          <div class="task-meta">${escapeHtml(task.task_id || "")}</div>
+          <div class="task-meta">PID ${escapeHtml(task.pid || "-")} | 开始 ${fmtDateTime(task.started_beijing || task.started_utc)}${task.ended_beijing || task.ended_utc ? ` | 结束 ${fmtDateTime(task.ended_beijing || task.ended_utc)}` : ""}</div>
+          <div class="task-meta">参数 ${escapeHtml(JSON.stringify(task.params || {}))}</div>
+          <div class="task-actions">
+            <button type="button" class="task-log-btn" data-task-id="${escapeHtml(task.task_id || "")}" data-stream="stdout">stdout</button>
+            <button type="button" class="task-log-btn" data-task-id="${escapeHtml(task.task_id || "")}" data-stream="stderr">stderr</button>
+            ${task.status === "running" ? `<button type="button" class="task-cancel-btn stop" data-task-id="${escapeHtml(task.task_id || "")}">取消</button>` : ""}
+          </div>
+          ${renderTaskLog(task.task_id, "stdout")}
+          ${renderTaskLog(task.task_id, "stderr")}
+        </div>
+      `).join("") : `<div class="empty">暂无桌面后台任务</div>`;
+    }
+
+    function renderTaskLog(taskId, stream) {
+      const key = `${taskId}:${stream}`;
+      const lines = state.taskLogs.get(key);
+      if (!lines) return "";
+      const body = lines.length ? lines.join("\n") : "(日志为空)";
+      return `<pre class="task-log">${escapeHtml(stream)}\n${escapeHtml(body)}</pre>`;
+    }
+
+    async function loadTaskLog(taskId, stream) {
+      if (!taskId) return;
+      $("desktopMessage").textContent = `正在读取 ${stream} 日志...`;
+      try {
+        const data = await fetchJson(`/api/tasks/${encodeURIComponent(taskId)}/logs?stream=${encodeURIComponent(stream)}&tail=160`);
+        state.taskLogs.set(`${taskId}:${stream}`, data.lines || []);
+        $("desktopMessage").textContent = `已读取 ${stream} 日志`;
+        await refreshTasks();
+      } catch (err) {
+        $("desktopMessage").textContent = `日志读取失败：${err.message}`;
+      }
+    }
+
+    async function cancelTask(taskId) {
+      if (!taskId) return;
+      $("desktopMessage").textContent = "正在取消任务...";
+      try {
+        await fetchJson(`/api/tasks/${encodeURIComponent(taskId)}/cancel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force: false })
+        });
+        $("desktopMessage").textContent = "取消指令已发送";
+        await refreshTasks();
+      } catch (err) {
+        $("desktopMessage").textContent = `取消失败：${err.message}`;
+      }
+    }
+
+    function renderLatestOptimization(data) {
+      if (!data || data.empty) {
+        $("latestOptModel").textContent = "-";
+        $("latestOptAccuracy").textContent = "-";
+        $("latestOptReturn").textContent = "-";
+        $("latestOptTime").textContent = "-";
+        return;
+      }
+      const top = (data.ranked || [])[0] || {};
+      const metrics = top.model_report?.test_metrics || top.model_metrics || {};
+      const backtest = top.model_report?.test_backtest || {};
+      $("latestOptModel").textContent = top.model_name || "-";
+      $("latestOptAccuracy").textContent = `${fmtPct(metrics.accuracy)} / ${fmtNum(metrics.auc, 3)}`;
+      $("latestOptReturn").innerHTML = `<span class="${signedClass(backtest.total_return)}">${fmtPct(backtest.total_return)}</span> / <span class="${signedClass(backtest.max_drawdown)}">${fmtPct(backtest.max_drawdown)}</span>`;
+      $("latestOptTime").textContent = fmtDateTime(data.created_beijing || data.created_utc);
+    }
+
+    function renderSimulationMemory(data) {
+      if (!data || data.empty) {
+        $("memoryStatus").textContent = "未生成";
+        return;
+      }
+      const top = (data.top_candidates || [])[0] || {};
+      const count = Number(data.observation_count || 0);
+      const target = top.target || "-";
+      const action = top.next_action || "observe";
+      $("memoryStatus").textContent = `${count}条 ${target} ${action}`;
+    }
+
+    function renderScheduledOptimization(data) {
+      if (!$("scheduledOptStatus")) return;
+      if (!data || data.empty) {
+        $("scheduledOptStatus").textContent = "未运行";
+        return;
+      }
+      const payload = data.payload || {};
+      const top = (payload.optimization_ranked || [])[0] || {};
+      const targetCount = (payload.selected_targets || []).length;
+      const model = top.model_name || payload.complexity || "已完成";
+      const score = top.balanced_accuracy !== undefined ? ` BA ${fmtPct(top.balanced_accuracy)}` : "";
+      $("scheduledOptStatus").textContent = `${targetCount}组 ${model}${score}`;
+    }
+
+    function renderMonitoring(data) {
+      if (!$("monitoringStatus")) return;
+      if (!data || data.empty) {
+        $("monitoringStatus").textContent = "未生成";
+        return;
+      }
+      const top = (data.items || [])[0] || {};
+      const retraining = top.retraining || {};
+      const drift = top.feature_drift || {};
+      const calibration = top.calibration || {};
+      const target = top.symbol && top.interval ? `${top.symbol} ${top.interval}` : "-";
+      const reason = (retraining.reasons || [])[0] || "稳定";
+      if (data.triggered_count) {
+        $("monitoringStatus").textContent = `${data.triggered_count}组触发 / ${target} / PSI ${fmtNum(drift.max_psi, 2)} / ECE ${fmtNum(calibration.expected_calibration_error, 2)} / ${reason}`;
+      } else if (retraining.acknowledged) {
+        $("monitoringStatus").textContent = `已优化确认 / ${target} / 等待新快照复检`;
+      } else {
+        $("monitoringStatus").textContent = `${(data.items || []).length}组稳定 / ${target}`;
+      }
+    }
+
+    function renderDataMaintenance(data) {
+      if (!$("dataMaintenanceStatus")) return;
+      if (!data || data.empty) {
+        $("dataMaintenanceStatus").textContent = "未运行";
+        return;
+      }
+      const payload = data.payload || {};
+      const compactions = (payload.realtime_compaction || []).filter((item) => ["compacted", "would_compact"].includes(item.action)).length;
+      const tmpCleaned = (payload.tmp_cleanup || []).length;
+      $("dataMaintenanceStatus").textContent = `${payload.dry_run ? "预演" : "完成"} ${compactions}组 ${tmpCleaned}临时`;
+    }
+
+    function renderPortfolio(data) {
+      const empty = !data || data.empty;
+      const payload = empty ? {} : (data.payload || {});
+      const decision = payload.decision || {};
+      const correlation = payload.correlation || {};
+      const expectedShortfall = payload.expected_shortfall || {};
+      const paper = payload.paper || {};
+      const paperState = paper.state || {};
+      const paperEvent = paper.latest_event || {};
+      const weights = decision.weights || {};
+      const entries = Object.entries(weights).sort((left, right) => Math.abs(right[1]) - Math.abs(left[1]));
+      if (empty) {
+        $("portfolioStatus").textContent = "未生成";
+        $("portfolioGross").textContent = "-";
+        $("portfolioNet").textContent = "-";
+        $("portfolioRisk").textContent = "-";
+        $("portfolioClusters").textContent = "-";
+        $("portfolioCvar").textContent = "-";
+        $("portfolioPaperEquity").textContent = "-";
+        $("portfolioPaperRisk").textContent = "-";
+        $("portfolioPaperState").textContent = "-";
+        $("portfolioWeightsWrap").innerHTML = `<div class="empty">启动多币种 runner 后生成只读目标权重。</div>`;
+        $("portfolioRefreshText").textContent = "等待 runner 生成";
+        return;
+      }
+      $("portfolioStatus").textContent = `${decision.allow_portfolio ? "有目标" : "无交易"} / ${fmtPct(decision.gross_exposure)}`;
+      $("portfolioGross").textContent = fmtPct(decision.gross_exposure);
+      $("portfolioNet").textContent = fmtPct(decision.net_exposure);
+      $("portfolioRisk").textContent = `${decision.risk_level || "-"} / ${decision.reason || "-"}`;
+      $("portfolioClusters").textContent = `${Object.keys(correlation.clusters || {}).length}币 / ${Object.keys(decision.cluster_exposure || {}).length}簇`;
+      $("portfolioCvar").textContent = expectedShortfall.available
+        ? `${fmtPct(expectedShortfall.expected_shortfall_loss)} / ${fmtPct(expectedShortfall.limit)}${expectedShortfall.limit_applied ? " 已缩仓" : ""}`
+        : `不可用 / ${expectedShortfall.reason || "无历史"}`;
+      $("portfolioPaperEquity").textContent = paperState.equity === undefined
+        ? "等待新 runner 快照"
+        : `${fmtNum(paperState.equity, 2)} / ${fmtPct(paperState.total_return)}`;
+      $("portfolioPaperRisk").textContent = paperState.drawdown === undefined
+        ? "-"
+        : `${fmtPct(paperState.drawdown)} / ${fmtPct(paperState.daily_return)}`;
+      $("portfolioPaperState").textContent = paperState.steps === undefined
+        ? "-"
+        : `${paperState.steps}步 / ${paperEvent.action || "-"} / ${paperState.last_reason || "-"}`;
+      $("portfolioRefreshText").textContent = `局部刷新 ${fmtDateTime(payload.created_beijing)} | 仅规划，不下单`;
+      $("portfolioWeightsWrap").innerHTML = entries.length ? `
+        <table>
+          <thead><tr><th>币种</th><th>目标权重</th><th>方向</th><th>约束结果</th></tr></thead>
+          <tbody>
+            ${entries.map(([symbol, weight]) => `
+              <tr>
+                <td>${escapeHtml(symbol)}</td>
+                <td class="${signedClass(weight)}">${fmtPct(weight)}</td>
+                <td>${weight > 0 ? "做多" : (weight < 0 ? "做空" : "观望")}</td>
+                <td>${escapeHtml(decision.asset_reasons?.[symbol] || "-")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : `<div class="empty">当前没有通过阈值、风险与流动性约束的目标。</div>`;
+    }
+
+    function drawTriangle(ctx, x, y, size, direction, color) {
+      ctx.beginPath();
+      if (direction === "up") {
+        ctx.moveTo(x, y - size);
+        ctx.lineTo(x + size, y + size);
+        ctx.lineTo(x - size, y + size);
+      } else {
+        ctx.moveTo(x, y + size);
+        ctx.lineTo(x + size, y - size);
+        ctx.lineTo(x - size, y - size);
+      }
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
+    function drawDecisionChart(payload) {
+      state.chartData = payload;
+      const canvas = $("decisionCanvas");
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      const points = payload?.points || [];
+      if (!points.length) {
+        ctx.fillStyle = "#627083";
+        ctx.font = "14px Segoe UI, Microsoft YaHei, Arial";
+        ctx.fillText(payload?.message || "暂无图表数据，请先运行 runner。", 24, 42);
+        return;
+      }
+
+      const margin = { left: 62, right: 22, top: 22, bottom: 30 };
+      const gap = 18;
+      const probHeight = 92;
+      const priceTop = margin.top;
+      const priceHeight = rect.height - margin.top - margin.bottom - probHeight - gap;
+      const probTop = priceTop + priceHeight + gap;
+      const plotWidth = rect.width - margin.left - margin.right;
+      const closes = points.map((p) => Number(p.close));
+      const probs = points.map((p) => Number(p.prob_up));
+      let minPrice = Math.min(...closes);
+      let maxPrice = Math.max(...closes);
+      const pad = Math.max((maxPrice - minPrice) * 0.08, maxPrice * 0.0002);
+      minPrice -= pad;
+      maxPrice += pad;
+
+      const xFor = (i) => margin.left + (points.length <= 1 ? 0 : (i / (points.length - 1)) * plotWidth);
+      const yPrice = (value) => priceTop + (1 - (value - minPrice) / Math.max(maxPrice - minPrice, 1e-9)) * priceHeight;
+      const yProb = (value) => probTop + (1 - value) * probHeight;
+
+      ctx.strokeStyle = "#d7dee8";
+      ctx.lineWidth = 1;
+      ctx.font = "12px Segoe UI, Microsoft YaHei, Arial";
+      ctx.fillStyle = "#627083";
+      for (let i = 0; i <= 4; i++) {
+        const y = priceTop + (i / 4) * priceHeight;
+        ctx.beginPath();
+        ctx.moveTo(margin.left, y);
+        ctx.lineTo(rect.width - margin.right, y);
+        ctx.stroke();
+        const value = maxPrice - (i / 4) * (maxPrice - minPrice);
+        ctx.fillText(fmtPrice(value), 8, y + 4);
+      }
+
+      [0, 0.5, 1].forEach((value) => {
+        const y = yProb(value);
+        ctx.beginPath();
+        ctx.moveTo(margin.left, y);
+        ctx.lineTo(rect.width - margin.right, y);
+        ctx.stroke();
+        ctx.fillText(`${Math.round(value * 100)}%`, 22, y + 4);
+      });
+
+      const longThreshold = Number(payload.thresholds?.long ?? 0.57);
+      const shortThreshold = Number(payload.thresholds?.short ?? 0.43);
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = "#1f8a4c";
+      ctx.beginPath();
+      ctx.moveTo(margin.left, yProb(longThreshold));
+      ctx.lineTo(rect.width - margin.right, yProb(longThreshold));
+      ctx.stroke();
+      ctx.strokeStyle = "#c33d4b";
+      ctx.beginPath();
+      ctx.moveTo(margin.left, yProb(shortThreshold));
+      ctx.lineTo(rect.width - margin.right, yProb(shortThreshold));
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = "#2f6fed";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      points.forEach((point, i) => {
+        const x = xFor(i);
+        const y = yPrice(Number(point.close));
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      ctx.strokeStyle = "#0f8b8d";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      probs.forEach((prob, i) => {
+        const x = xFor(i);
+        const y = yProb(prob);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      points.forEach((point, i) => {
+        const signal = point.signal;
+        if (!signal) return;
+        const x = xFor(i);
+        const y = yPrice(Number(point.close));
+        if (signal === "buy") {
+          drawTriangle(ctx, x, y - 9, 7, "up", "#1f8a4c");
+          ctx.fillStyle = "#1f8a4c";
+          ctx.fillText("买", x + 8, y - 8);
+        } else if (signal === "sell") {
+          drawTriangle(ctx, x, y + 9, 7, "down", "#c33d4b");
+          ctx.fillStyle = "#c33d4b";
+          ctx.fillText("卖", x + 8, y + 16);
+        } else if (signal === "exit") {
+          ctx.fillStyle = "#c88400";
+          ctx.fillRect(x - 5, y - 5, 10, 10);
+        }
+      });
+
+      const last = points[points.length - 1];
+      ctx.fillStyle = "#17202a";
+      ctx.font = "12px Segoe UI, Microsoft YaHei, Arial";
+      ctx.fillText(`${payload.symbol} ${payload.interval} | ${last.time || ""}`, margin.left, rect.height - 10);
+    }
+
+    function renderChartMeta(data) {
+      if (data.empty) {
+        $("chartDecision").textContent = "-";
+        $("chartProb").textContent = "-";
+        $("chartProb5m").textContent = "-";
+        $("chartProb10m").textContent = "-";
+        $("chartModel").textContent = "-";
+        $("chartPrice").textContent = "-";
+        $("chartRisk").textContent = "-";
+        $("chartCosts").textContent = "-";
+        $("chartExecution").textContent = "-";
+        $("chartExchange").textContent = "-";
+        $("chartReturn").textContent = "-";
+        $("chartRefreshText").textContent = data.message || "暂无图表数据";
+        return;
+      }
+      $("chartDecision").textContent = data.decision || "-";
+      $("chartProb").textContent = fmtPct(data.latest_up_probability);
+      const horizon = data.latest_horizon_probabilities || {};
+      const matches = data.recent_horizon_matches?.items || {};
+      const match5 = matches.next_5m?.direction_match_rate;
+      const match10 = matches.next_10m?.direction_match_rate;
+      $("chartProb5m").textContent = `${fmtPct(horizon.next_5m)} / ${fmtPct(match5)}`;
+      $("chartProb10m").textContent = `${fmtPct(horizon.next_10m)} / ${fmtPct(match10)}`;
+      $("chartModel").textContent = data.model_name || "-";
+      $("chartPrice").textContent = fmtPrice(data.latest_close);
+      const risk = data.latest_risk_decision;
+      $("chartRisk").textContent = risk
+        ? `${risk.allow_trade ? "允许" : "否决"} / ${risk.risk_level || "-"} / ${risk.reason || "-"}`
+        : "旧报告无风险数据";
+      if (data.backtest?.ewma_volatility_enabled) {
+        $("chartRisk").textContent += ` / EWMA日化 ${fmtPct(data.backtest?.average_ewma_daily_volatility)}→${fmtPct(data.backtest?.ewma_daily_volatility_target)} / 缩放 ${fmtPct(data.backtest?.average_volatility_position_scale)}`;
+      }
+      if (data.backtest?.funding_crowding_guard_enabled) {
+        $("chartRisk").textContent += ` / 资金拥挤拦截 ${data.backtest?.funding_crowding_blocked_rows || 0}`;
+      }
+      const commission = data.backtest?.commission_drag;
+      const slippage = data.backtest?.slippage_drag;
+      const funding = data.backtest?.funding_drag;
+      $("chartCosts").textContent = commission === undefined || slippage === undefined
+        ? `旧报告综合 ${fmtPct(data.backtest?.fee_drag)} / 资金 ${fmtPct(funding)}`
+        : `${fmtPct(commission)} / ${fmtPct(slippage)} / ${fmtPct(funding)}`;
+      const fillRatio = data.backtest?.average_fill_ratio;
+      const latencyBars = data.backtest?.execution_latency_bars;
+      const rejectedOrders = data.backtest?.minimum_order_rejections;
+      const liquidityLimited = data.backtest?.liquidity_limited_orders;
+      const marketParticipation = data.backtest?.average_market_participation_rate;
+      const effectiveSlippage = data.backtest?.average_effective_slippage_rate;
+      const downtimeBlocks = data.backtest?.exchange_downtime_blocked_orders;
+      const exchangeAvailableRate = data.backtest?.exchange_available_rate;
+      const maxQuantityLimited = data.backtest?.maximum_quantity_limited_orders;
+      const latestExecution = data.latest_execution_decision;
+      $("chartExecution").textContent = fillRatio === undefined
+        ? "旧报告无成交质量数据"
+        : `成交 ${fmtPct(fillRatio)} / 延迟 ${latencyBars || 0} K / 拒绝 ${rejectedOrders || 0}`;
+      if (liquidityLimited !== undefined) {
+        $("chartExecution").textContent += ` / 流动性限单 ${liquidityLimited || 0}`;
+      }
+      if (marketParticipation !== undefined) {
+        $("chartExecution").textContent += ` / 参与率 ${fmtPct(marketParticipation)}`;
+      }
+      if (effectiveSlippage !== undefined) {
+        $("chartExecution").textContent += ` / 滑点 ${fmtPct(effectiveSlippage)}`;
+      }
+      $("chartExchange").textContent = latestExecution
+        ? `${latestExecution.allow_execution ? "当前可执行" : "当前禁止执行"} / ${latestExecution.reason || "-"}`
+        : (exchangeAvailableRate === undefined
+          ? "旧报告无停机门禁数据"
+          : `历史可用 ${fmtPct(exchangeAvailableRate)} / 停机拦截 ${downtimeBlocks || 0} / 最大量分单 ${maxQuantityLimited || 0}`);
+      if (latestExecution && exchangeAvailableRate !== undefined) {
+        $("chartExchange").textContent += ` / 历史可用 ${fmtPct(exchangeAvailableRate)} / 拦截 ${downtimeBlocks || 0} / 分单 ${maxQuantityLimited || 0}`;
+      }
+      const liquidationEvents = data.backtest?.liquidation_events;
+      const liquidationFee = data.backtest?.liquidation_fee_drag;
+      if (liquidationEvents !== undefined) {
+        $("chartExecution").textContent += ` / 强平 ${liquidationEvents || 0}`;
+      }
+      if (liquidationFee !== undefined) {
+        $("chartCosts").textContent += ` / 强平费 ${fmtPct(liquidationFee)}`;
+      }
+      const ret = data.backtest?.total_return;
+      const dd = data.backtest?.max_drawdown;
+      $("chartReturn").innerHTML = `<span class="${signedClass(ret)}">${fmtPct(ret)}</span> / <span class="${signedClass(dd)}">${fmtPct(dd)}</span>`;
+      $("chartRefreshText").textContent = `图表刷新 ${fmtDateTime(Date.now())} | ${data.symbol} ${data.interval}`;
+    }
+
+    async function refreshChart() {
+      try {
+        const symbol = encodeURIComponent($("chartSymbolSelect").value || "auto");
+        const data = await fetchJson(`/api/decision-chart?symbol=${symbol}&points=180`);
+        renderChartMeta(data);
+        drawDecisionChart(data);
+      } catch (err) {
+        $("chartRefreshText").textContent = `图表读取失败：${err.message}`;
+      }
+    }
+
+    async function refreshRunner() {
+      const runner = await fetchJson("/api/runner");
+      renderRunner(runner);
+    }
+
+    async function refreshProgress() {
+      const progress = await fetchJson("/api/progress");
+      renderProgress(progress);
+    }
+
+    async function refreshReports() {
+      const reports = await fetchJson("/api/reports");
+      renderReports(reports);
+    }
+
+    async function refreshTasks() {
+      const tasks = await fetchJson("/api/tasks");
+      renderTasks(tasks);
+    }
+
+    async function refreshLatestOptimization() {
+      const latestOptimization = await fetchJson("/api/model-optimization/latest");
+      renderLatestOptimization(latestOptimization);
+    }
+
+    async function refreshSimulationMemory() {
+      const memory = await fetchJson("/api/simulation-memory/latest");
+      renderSimulationMemory(memory);
+    }
+
+    async function refreshScheduledOptimization() {
+      const scheduled = await fetchJson("/api/scheduled-optimization/latest");
+      renderScheduledOptimization(scheduled);
+    }
+
+    async function refreshMonitoring() {
+      const monitoring = await fetchJson("/api/monitoring/latest");
+      renderMonitoring(monitoring);
+    }
+
+    async function refreshDataMaintenance() {
+      const maintenance = await fetchJson("/api/data-maintenance/latest");
+      renderDataMaintenance(maintenance);
+    }
+
+    async function refreshPortfolio() {
+      const portfolio = await fetchJson("/api/portfolio/latest");
+      renderPortfolio(portfolio);
+    }
+
+    async function guardedRefresh(key, fn) {
+      if (state.refreshing.has(key)) return;
+      state.refreshing.add(key);
+      try {
+        await fn();
+      } finally {
+        state.refreshing.delete(key);
+      }
+    }
+
+    async function refreshAll() {
+      const results = await Promise.allSettled([
+        guardedRefresh("runner", refreshRunner),
+        guardedRefresh("progress", refreshProgress),
+        guardedRefresh("reports", refreshReports),
+        guardedRefresh("tasks", refreshTasks),
+        guardedRefresh("latestOptimization", refreshLatestOptimization),
+        guardedRefresh("simulationMemory", refreshSimulationMemory),
+        guardedRefresh("scheduledOptimization", refreshScheduledOptimization),
+        guardedRefresh("monitoring", refreshMonitoring),
+        guardedRefresh("dataMaintenance", refreshDataMaintenance),
+        guardedRefresh("portfolio", refreshPortfolio),
+        guardedRefresh("chart", refreshChart)
+      ]);
+      const failed = results.find((item) => item.status === "rejected");
+      if (failed) {
+        $("actionMessage").textContent = `控制台局部刷新失败：${failed.reason?.message || failed.reason}`;
+      }
+    }
+
+    function scheduleRefreshes() {
+      setInterval(() => guardedRefresh("progress", refreshProgress).catch(() => {}), 2000);
+      setInterval(() => guardedRefresh("runner", refreshRunner).catch(() => {}), 5000);
+      setInterval(() => guardedRefresh("chart", refreshChart).catch(() => {}), 5000);
+      setInterval(() => guardedRefresh("portfolio", refreshPortfolio).catch(() => {}), 10000);
+      const pollTasks = () => {
+        guardedRefresh("tasks", refreshTasks).catch(() => {}).finally(() => {
+          setTimeout(pollTasks, state.tasksHaveActive ? 3000 : 10000);
+        });
+      };
+      setTimeout(pollTasks, 3000);
+      setInterval(() => {
+        guardedRefresh("reports", refreshReports).catch(() => {});
+        guardedRefresh("latestOptimization", refreshLatestOptimization).catch(() => {});
+        guardedRefresh("simulationMemory", refreshSimulationMemory).catch(() => {});
+        guardedRefresh("scheduledOptimization", refreshScheduledOptimization).catch(() => {});
+        guardedRefresh("monitoring", refreshMonitoring).catch(() => {});
+        guardedRefresh("dataMaintenance", refreshDataMaintenance).catch(() => {});
+      }, 30000);
+      setInterval(renderProgressBar, 500);
+    }
+
+    $("startBtn").addEventListener("click", () => runnerAction("/api/runner/start", runnerPayload()));
+    $("resumeBtn").addEventListener("click", () => runnerAction("/api/runner/resume"));
+    $("pauseBtn").addEventListener("click", () => runnerAction("/api/runner/pause"));
+    $("stopBtn").addEventListener("click", () => runnerAction("/api/runner/stop"));
+    $("refreshStatusBtn").addEventListener("click", refreshAll);
+    $("modelOptimizeBtn").addEventListener("click", () => startDesktopTask("model-optimize", {
+      symbols: desktopSymbols(),
+      intervals: desktopIntervals(),
+      include_realtime: true,
+      complexity: "expanded",
+      rolling_folds: 1,
+      time_budget_minutes: 15,
+      max_model_trials: 24,
+      min_trades: 8,
+      max_drawdown_limit: 0.15,
+      min_profit_factor: 0.8
+    }));
+    $("scheduledOptimizeBtn").addEventListener("click", () => startDesktopTask("scheduled-optimize", {
+      symbols: ["BNBUSDT", "ETHUSDT"],
+      intervals: ["15m", "1h"],
+      include_realtime: true,
+      complexity: "standard",
+      rolling_folds: 0,
+      time_budget_minutes: 8,
+      max_model_trials: 2,
+      max_training_rows: 8000,
+      max_targets: 1,
+      maintenance: true
+    }));
+    $("liveTrainBtn").addEventListener("click", () => startDesktopTask("live-train", {
+      symbols: desktopSymbols(),
+      interval: state.interval || "5m",
+      limit: Number($("limitInput").value || 500),
+      iterations: 1
+    }));
+    $("dataMaintenanceBtn").addEventListener("click", () => startDesktopTask("data-maintenance", {
+      dry_run: false,
+      archive_old_realtime: true,
+      cleanup_tmp_older_than_hours: 6
+    }));
+    $("cacheDownloadBtn").addEventListener("click", () => startDesktopTask("download-cache", {
+      symbols: desktopSymbols(),
+      interval: state.interval || "5m",
+      start: "2024-01",
+      end: "2025-12"
+    }));
+    $("binanceCheckBtn").addEventListener("click", checkBinanceDownload);
+    $("memoryUpdateBtn").addEventListener("click", () => startDesktopTask("memory-update", {
+      max_observations_per_target: 120
+    }));
+    $("latestOptimizeBtn").addEventListener("click", refreshAll);
+    $("exportPortableBtn").addEventListener("click", exportPortable);
+    $("openReportsBtn").addEventListener("click", () => openPath("reports"));
+    $("taskList").addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      if (button.classList.contains("task-log-btn")) {
+        loadTaskLog(button.dataset.taskId, button.dataset.stream || "stdout");
+      }
+      if (button.classList.contains("task-cancel-btn")) {
+        cancelTask(button.dataset.taskId);
+      }
+    });
+
+    fetchJson("/api/config")
+      .then(renderConfig)
+      .then(refreshAll)
+      .catch((err) => {
+        $("actionMessage").textContent = `配置读取失败：${err.message}`;
+      });
+
+    scheduleRefreshes();
+    window.addEventListener("resize", () => {
+      if (state.chartData) drawDecisionChart(state.chartData);
+    });
+  </script>
+</body>
+</html>
