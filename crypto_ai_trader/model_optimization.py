@@ -33,7 +33,11 @@ from .models import (
 )
 from .model_selection import rank_model_candidates
 from .progress import safe_replace_text
-from .shadow_learning import select_shadow_threshold_candidate
+from .shadow_learning import (
+    LOW_THRESHOLD_CANDIDATES,
+    evaluate_low_threshold_strategy_candidate,
+    select_low_threshold_strategy_candidate,
+)
 from .strategy_calibration import (
     archetype_matches_side,
     archetype_side_robustness,
@@ -638,8 +642,10 @@ def select_directional_model(
     direction: str,
     train_df: pd.DataFrame,
     valid_df: pd.DataFrame,
+    validation_gate_df: pd.DataFrame,
     xs_train: np.ndarray,
     xs_valid: np.ndarray,
+    xs_gate: np.ndarray,
     *,
     seed: int,
     label_min_return: float,
@@ -692,7 +698,7 @@ def select_directional_model(
     best_score = -999.0
     shadow_model: object | None = None
     shadow_candidate: dict[str, Any] | None = None
-    shadow_score = -999.0
+    shadow_score = (-999.0, -999.0)
 
     def threshold_report(prob: np.ndarray) -> dict[str, Any]:
         rows: list[dict[str, float]] = []
@@ -755,6 +761,7 @@ def select_directional_model(
         try:
             model.fit(xs_train, y_train, sample_weight=weights)
             prob = model.predict_proba(xs_valid)[:, 1]
+            gate_prob = model.predict_proba(xs_gate)[:, 1]
             metrics = classification_metrics(y_valid, prob)
             thresholds = threshold_report(prob)
             best_threshold = thresholds.get("best", {})
@@ -786,32 +793,28 @@ def select_directional_model(
             if score > best_score:
                 best_score = score
                 best_model = model
-            candidate = select_shadow_threshold_candidate(
-                list(thresholds.get("ranking") or []),
+            candidate = (
+                select_low_threshold_strategy_candidate(
+                    prob,
+                    valid_df,
+                    gate_prob,
+                    validation_gate_df,
+                    direction=direction,
+                    model_name=name,
+                    cost_buffer=cost_buffer,
+                )
+                if direction in {"long", "short"}
+                else None
             )
             if candidate is not None:
                 candidate_score = (
-                    float(candidate["signal_total_return_after_cost"])
-                    + 0.001
-                    * min(
-                        float(
-                            candidate[
-                                "signal_profit_factor_after_cost"
-                            ]
-                        ),
-                        10.0,
-                    )
+                    -float(candidate["threshold"]),
+                    float(candidate["score"]),
                 )
                 if candidate_score > shadow_score:
                     shadow_score = candidate_score
                     shadow_model = model
-                    shadow_candidate = {
-                        **candidate,
-                        "model_name": name,
-                        "direction": direction,
-                        "selection_dataset": "validation_calibration",
-                        "test_used_for_selection": False,
-                    }
+                    shadow_candidate = candidate
         except Exception as exc:
             skipped.append({"name": name, "reason": f"fit_failed: {exc}"})
     ranked.sort(key=lambda item: item["selection_score"], reverse=True)
@@ -836,10 +839,14 @@ def select_directional_model(
         "shadow_candidate": shadow_candidate,
         "shadow_policy": {
             "min_signal_count": 8,
-            "min_profit_factor": 1.20,
+            "min_profit_factor": 1.05,
             "min_total_return": 0.0,
             "requires_positive_expectancy": True,
             "selection_dataset": "validation_calibration",
+            "gate_dataset": "validation_gate",
+            "raw_threshold_candidates": list(LOW_THRESHOLD_CANDIDATES),
+            "strategy_filter_required": True,
+            "requires_positive_gate_return": True,
             "test_used_for_selection": False,
         },
     }
@@ -848,15 +855,18 @@ def select_directional_model(
 def train_directional_auxiliary_models(
     train_df: pd.DataFrame,
     valid_df: pd.DataFrame,
+    validation_gate_df: pd.DataFrame,
     test_df: pd.DataFrame,
     *,
     xs_train: np.ndarray,
     xs_valid: np.ndarray,
+    xs_gate: np.ndarray,
     xs_test: np.ndarray,
     seed: int,
     label_min_return: float,
     deadline: float,
     base_backtest_cfg: BacktestConfig,
+    max_trials: int = 4,
 ) -> tuple[dict[str, object], dict[str, dict[str, object]], dict[str, Any]]:
     auxiliary_models: dict[str, object] = {}
     auxiliary_metadata: dict[str, dict[str, object]] = {}
@@ -866,17 +876,26 @@ def train_directional_auxiliary_models(
         "test_data_usage": "final_metrics_only_after_auxiliary_selection",
         "directions": {},
     }
-    for offset, direction in enumerate(["trade", "long", "short"], start=1):
+    directions = ["long", "short", "trade"]
+    for offset, direction in enumerate(directions, start=1):
+        remaining_directions = len(directions) - offset + 1
+        remaining_seconds = max(deadline - time.monotonic(), 0.0)
+        direction_deadline = time.monotonic() + (
+            remaining_seconds / max(remaining_directions, 1)
+        )
         cost_buffer = float(base_backtest_cfg.fee_rate + base_backtest_cfg.slippage_rate + base_backtest_cfg.funding_rate_buffer)
         model, shadow_model, direction_report = select_directional_model(
             direction,
             train_df,
             valid_df,
+            validation_gate_df,
             xs_train,
             xs_valid,
+            xs_gate,
             seed=seed + 100 + offset,
             label_min_return=label_min_return,
-            deadline=deadline,
+            deadline=direction_deadline,
+            max_trials=max(int(max_trials), 1),
             cost_buffer=cost_buffer,
         )
         if model is not None:
@@ -901,6 +920,51 @@ def train_directional_auxiliary_models(
             direction_report["test_used_for_selection"] = False
         shadow_candidate = direction_report.get("shadow_candidate")
         if shadow_model is not None and isinstance(shadow_candidate, dict):
+            shadow_test_prob = shadow_model.predict_proba(xs_test)[:, 1]
+            shadow_test = evaluate_low_threshold_strategy_candidate(
+                shadow_test_prob,
+                test_df,
+                shadow_candidate,
+            )
+            shadow_test_passed = bool(
+                int(shadow_test["signal_count"]) >= 3
+                and shadow_test[
+                    "signal_total_return_after_cost"
+                ]
+                > 0.0
+                and shadow_test[
+                    "signal_expectancy_after_cost"
+                ]
+                > 0.0
+                and shadow_test[
+                    "signal_profit_factor_after_cost"
+                ]
+                >= 1.0
+            )
+            shadow_candidate = {
+                **shadow_candidate,
+                "test": shadow_test,
+                "test_gate_passed": shadow_test_passed,
+                "test_used_for_selection": False,
+                "test_data_usage": "final_publish_gate_only",
+            }
+            direction_report["shadow_test_gate"] = {
+                "passed": shadow_test_passed,
+                "minimum_signal_count": 3,
+                "requires_positive_return": True,
+                "requires_positive_expectancy": True,
+                "minimum_profit_factor": 1.0,
+                "test_used_for_selection": False,
+                "test": shadow_test,
+            }
+            if not shadow_test_passed:
+                direction_report[
+                    "shadow_candidate_rejected_by_test"
+                ] = shadow_candidate
+                direction_report["shadow_candidate"] = None
+                shadow_candidate = None
+        if shadow_model is not None and isinstance(shadow_candidate, dict):
+            direction_report["shadow_candidate"] = shadow_candidate
             shadow_key = f"shadow_direction_{direction}"
             auxiliary_models[shadow_key] = shadow_model
             auxiliary_metadata[shadow_key] = {
@@ -938,6 +1002,10 @@ def train_directional_auxiliary_models(
                     )
                 ),
                 "selection_dataset": "validation_calibration",
+                "gate_dataset": "validation_gate",
+                "strategy_profile": str(
+                    shadow_candidate.get("strategy_profile") or ""
+                ),
                 "test_used_for_selection": False,
                 "mode": "shadow_paper_only",
             }
@@ -1507,9 +1575,52 @@ def select_model_candidates(candidates: list[object], max_model_trials: int, see
     ]
     neural_mlp = explicit_neural_mlp + standard_mlp
     baseline = [model for model in candidates if name_of(model).startswith("logistic_regression_numpy")]
+    boosted_tree = [
+        model
+        for model in candidates
+        if name_of(model).startswith(
+            (
+                "sklearn_hist_gradient_boosting",
+                "lightgbm_",
+                "xgboost_",
+                "catboost_",
+            )
+        )
+    ]
+    sklearn_linear = [
+        model
+        for model in candidates
+        if name_of(model).startswith("sklearn_logistic_regression")
+    ]
+    forests = [
+        model
+        for model in candidates
+        if "extra_trees" in name_of(model)
+        or "random_forest" in name_of(model)
+    ]
     non_torch_rest = [model for model in candidates if model not in torch_models]
 
     selected: list[object] = []
+    if max_model_trials <= 5:
+        for bucket in (
+            baseline,
+            sklearn_linear,
+            boosted_tree,
+            neural_mlp,
+            forests,
+        ):
+            add_unique(
+                selected,
+                bucket,
+                min(max_model_trials, len(selected) + 1),
+            )
+        add_unique(
+            selected,
+            [model for model in candidates if model not in selected],
+            max_model_trials,
+        )
+        return selected
+
     reserve_torch = 1 if torch_models and max_model_trials >= 8 else 0
     non_torch_limit = max_model_trials - reserve_torch
     baseline_count = 1 if max_model_trials <= 5 else 2
@@ -1555,6 +1666,11 @@ def train_accuracy_first_candidates(
     max_threshold_evals: int | None = None,
     validation_split_purge_rows: int = 0,
 ) -> tuple[ModelBundle, dict[str, Any], pd.DataFrame]:
+    optimization_started = time.monotonic()
+    total_budget_seconds = max(deadline - optimization_started, 1.0)
+    primary_deadline = optimization_started + (
+        total_budget_seconds * 0.50
+    )
     validation_split = split_validation_for_strategy_calibration(
         valid_df,
         purge_rows=max(int(validation_split_purge_rows or 0), int(max(MULTI_HORIZON_STEPS)), 0),
@@ -1574,10 +1690,16 @@ def train_accuracy_first_candidates(
         target_col=selected_primary_target_col,
         feature_columns=feature_columns,
     )
+    x_gate, _, _ = feature_matrix(
+        validation_gate_df,
+        target_col=selected_primary_target_col,
+        feature_columns=feature_columns,
+    )
     x_test, y_test, _ = feature_matrix(test_df, target_col=selected_primary_target_col, feature_columns=feature_columns)
     scaler = StandardScaler().fit(x_train)
     xs_train = scaler.transform(x_train)
     xs_valid = scaler.transform(x_valid)
+    xs_gate = scaler.transform(x_gate)
     xs_test = scaler.transform(x_test)
     base_train_weights, base_weight_report = sample_weight_for_variant(train_df, label_min_return, "base_large_move")
     event_train_weights, event_balance_report = sample_weight_for_variant(train_df, label_min_return, "event_balanced")
@@ -1601,9 +1723,17 @@ def train_accuracy_first_candidates(
         weight_variants.append(("event_balanced", event_train_weights))
     if regime_event_balance_report.get("enabled"):
         weight_variants.append(("volatility_regime_event_balanced", regime_train_weights))
-    if max_model_trials <= 1 and edge_balance_report.get("enabled"):
+    if (
+        total_budget_seconds <= 10.0 * 60.0
+        and edge_balance_report.get("enabled")
+    ):
         weight_variants = [("cost_edge_balanced", edge_train_weights)]
-    elif deadline - time.monotonic() < 8.0 * 60.0 and edge_balance_report.get("enabled"):
+    elif max_model_trials <= 1 and edge_balance_report.get("enabled"):
+        weight_variants = [("cost_edge_balanced", edge_train_weights)]
+    elif (
+        primary_deadline - time.monotonic() < 8.0 * 60.0
+        and edge_balance_report.get("enabled")
+    ):
         weight_variants = [
             item
             for item in weight_variants
@@ -1629,7 +1759,7 @@ def train_accuracy_first_candidates(
             model = copy.deepcopy(base_model)
             model_name = str(base_model_name) if weight_variant == "base_large_move" else f"{base_model_name}_{weight_variant}"
             setattr(model, "name", model_name)
-            if time.monotonic() >= deadline:
+            if time.monotonic() >= primary_deadline:
                 skipped.append({"name": model_name, "reason": "time_budget_exhausted"})
                 continue
             try:
@@ -1645,7 +1775,7 @@ def train_accuracy_first_candidates(
                     y_train,
                     train_weights,
                     folds=rolling_folds,
-                    deadline=deadline,
+                    deadline=primary_deadline,
                     train_df=train_df,
                     label_min_return=label_min_return,
                     weight_variant=weight_variant,
@@ -1741,7 +1871,7 @@ def train_accuracy_first_candidates(
                 skipped.append({"name": model_name, "reason": f"fit_failed: {exc}"})
     for size in [2, 3, 4]:
         top = sorted(fitted_for_ensemble, key=lambda item: item[0], reverse=True)[:size]
-        if len(top) < size or time.monotonic() >= deadline:
+        if len(top) < size or time.monotonic() >= primary_deadline:
             continue
         ensemble_name = "ensemble_probability_average" if size == 4 else f"ensemble_probability_average_top{size}"
         ensemble = EnsembleProbabilityModel(
@@ -1859,14 +1989,17 @@ def train_accuracy_first_candidates(
     directional_models, directional_metadata, directional_report = train_directional_auxiliary_models(
         train_df,
         validation_calibration_df,
+        validation_gate_df,
         test_df,
         xs_train=xs_train,
         xs_valid=xs_valid,
+        xs_gate=xs_gate,
         xs_test=xs_test,
         seed=seed,
         label_min_return=label_min_return,
         deadline=deadline,
         base_backtest_cfg=base_backtest_cfg,
+        max_trials=max_model_trials,
     )
     horizon_models, horizon_metadata, multi_horizon_report = train_multi_horizon_models(
         train_df,

@@ -1037,7 +1037,7 @@
                 <td>${fmtPct(item.latest_up_probability)}</td>
                 <td>${fmtPct(item.latest_horizon_probabilities?.next_5m)}</td>
                 <td>${fmtPct(item.latest_horizon_probabilities?.next_10m)}</td>
-                <td title="${escapeHtml((item.shadow_learning?.blockers || []).join(", "))}">${item.shadow_learning?.latest_signal_active ? `${item.shadow_learning.selected_side === "short" ? "模拟做空" : "模拟做多"} ${fmtPct(item.shadow_learning.target_exposure)}` : (item.shadow_learning?.eligible ? `等待阈值 ${fmtPct(item.shadow_learning.signal_threshold)}` : "未达资格")}</td>
+                <td title="${escapeHtml(`${item.shadow_learning?.strategy_profile || ""} ${(item.shadow_learning?.blockers || []).join(", ")}`)}">${item.shadow_learning?.latest_signal_active ? `${item.shadow_learning.leverage || 1}x ${item.shadow_learning.selected_side === "short" ? "模拟做空" : "模拟做多"} / 名义 ${fmtPct(item.shadow_learning.target_notional_exposure)} / 剩余 ${item.shadow_learning.remaining_hold_bars || item.shadow_learning.forecast_horizon_bars || 1}根` : (item.shadow_learning?.eligible ? `低阈值 ${fmtPct(item.shadow_learning.signal_threshold)} / ${item.shadow_learning.forecast_horizon_bars || 1}根 / ${item.shadow_learning.strategy_filter_passed ? "策略通过" : "策略等待"}` : "未达资格")}</td>
                 <td title="${item.latest_risk_decision?.reason || "旧报告无风险数据"}">${item.latest_risk_decision ? `${item.latest_risk_decision.allow_trade ? "允许" : "否决"} / ${item.latest_risk_decision.risk_level || "-"}` : "-"}</td>
                 <td class="${signedClass(item.total_return)}">${fmtPct(item.total_return)}</td>
                 <td class="${signedClass(item.max_drawdown)}">${fmtPct(item.max_drawdown)}</td>
@@ -1286,6 +1286,9 @@
       const shadowEvent = shadowPaper.latest_event || {};
       const shadowEntries = Object.entries(shadowDecision.weights || {})
         .sort((left, right) => Math.abs(right[1]) - Math.abs(left[1]));
+      const shadowLeverage = Number(state.config?.shadow_leverage || 10);
+      const shadowMargin = Number(state.config?.shadow_max_position_fraction || 0.025);
+      const shadowNotional = Number(state.config?.shadow_max_notional_fraction || (shadowLeverage * shadowMargin));
       if (empty) {
         $("portfolioStatus").textContent = "未生成";
         $("portfolioGross").textContent = "-";
@@ -1347,7 +1350,7 @@
         </table>
       ` : `<div class="empty">当前没有通过阈值、风险与流动性约束的目标。</div>`;
       $("shadowPortfolioWeightsWrap").innerHTML = shadowEntries.length ? `
-        <h3 style="margin:14px 0 8px;">Shadow 学习仓位（1x，单币最多 5%）</h3>
+        <h3 style="margin:14px 0 8px;">Shadow 学习仓位（${shadowLeverage}x 逐仓模拟，单币保证金 ${fmtPct(shadowMargin)}，名义上限 ${fmtPct(shadowNotional)}）</h3>
         <table>
           <thead><tr><th>币种</th><th>Shadow 权重</th><th>方向</th><th>资格与约束</th></tr></thead>
           <tbody>

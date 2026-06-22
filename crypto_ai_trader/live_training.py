@@ -666,6 +666,7 @@ def train_live_symbol(
     shadow_learning = build_shadow_learning_decision(
         model_report,
         latest_shadow_probabilities,
+        latest_features=latest_row,
         execution_allowed=bool(
             latest_execution_decision["allow_execution"]
         ),

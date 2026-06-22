@@ -44,8 +44,8 @@ class TraderConfig:
     maintenance_margin_rate: float = 0.005
     liquidation_buffer: float = 0.01
     liquidation_fee_rate: float = 0.005
-    max_leverage: int = 3
-    default_leverage: int = 1
+    max_leverage: int = 10
+    default_leverage: int = 10
     margin_type: str = "ISOLATED"
     risk_per_trade: float = 0.005
     ewma_volatility_enabled: bool = True
@@ -101,10 +101,10 @@ class TraderConfig:
     portfolio_require_complete_inputs: bool = True
     shadow_learning_enabled: bool = True
     shadow_min_signal_count: int = 8
-    shadow_min_profit_factor: float = 1.20
-    shadow_max_position_fraction: float = 0.05
-    shadow_leverage: int = 1
-    shadow_target_gross_exposure: float = 0.20
+    shadow_min_profit_factor: float = 1.05
+    shadow_max_position_fraction: float = 0.025
+    shadow_leverage: int = 10
+    shadow_target_gross_exposure: float = 0.50
     runner_max_model_trials: int = 4
     runner_time_budget_minutes: float = 6.0
     runner_rolling_folds: int = 1

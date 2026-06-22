@@ -24,7 +24,10 @@ from .portfolio_paper import (
     rebalance_portfolio_paper_state,
 )
 from .progress import safe_replace_text, tracker_for_reports
-from .shadow_learning import shadow_portfolio_report
+from .shadow_learning import (
+    apply_shadow_holding_period,
+    shadow_portfolio_report,
+)
 from .time_utils import add_beijing_aliases, beijing_now_iso, beijing_stamp
 
 
@@ -255,6 +258,11 @@ def runner_once(
                 },
                 event_type="runner_train",
             )
+    reports, shadow_holding_state = apply_shadow_holding_period(
+        reports,
+        state_path=state_dir / f"shadow_holding_{interval}.json",
+        interval=interval,
+    )
     ranked = sorted(reports, key=lambda item: item["backtest"]["total_return"], reverse=True)
     return_series: dict[str, pd.Series] = {}
     for symbol in symbols:
@@ -286,6 +294,11 @@ def runner_once(
             ledger_name="portfolio",
         )
     )
+    shadow_notional_cap = min(
+        float(cfg.shadow_max_position_fraction)
+        * max(float(cfg.shadow_leverage), 1.0),
+        1.0,
+    )
     shadow_cfg = replace(
         cfg,
         default_leverage=int(cfg.shadow_leverage),
@@ -299,7 +312,7 @@ def runner_once(
         ),
         portfolio_max_single_weight=min(
             float(cfg.portfolio_max_single_weight),
-            float(cfg.shadow_max_position_fraction),
+            shadow_notional_cap,
         ),
         portfolio_max_sector_exposure=min(
             float(cfg.portfolio_max_sector_exposure),
@@ -338,6 +351,7 @@ def runner_once(
         "ranked": ranked,
         "portfolio": portfolio_snapshot,
         "shadow_portfolio": shadow_portfolio_snapshot,
+        "shadow_holding": shadow_holding_state,
     }
     cfg.reports_dir.mkdir(parents=True, exist_ok=True)
     latest_path = cfg.reports_dir / "runner_live_latest.json"
@@ -385,6 +399,7 @@ def runner_once(
         latest_shadow_portfolio_paper_state=(
             shadow_portfolio_paper_state.to_dict()
         ),
+        latest_shadow_holding_state=shadow_holding_state,
         latest_ranked=[
             {
                 "symbol": item["symbol"],
@@ -434,6 +449,7 @@ def run_loop(args: argparse.Namespace) -> None:
         poll_seconds=args.poll_seconds,
         proxy=proxy,
         live_trading_enabled=False,
+        last_error="",
     )
     progress = tracker_for_reports(cfg.reports_dir)
     progress.reset(f"Local runner {args.interval}", 1)

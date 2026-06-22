@@ -16,6 +16,13 @@ $Python = Join-Path $Root ".venv\Scripts\python.exe"
 $LogDir = Join-Path $Root "logs"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
+$Symbols = @(
+    $Symbols |
+        ForEach-Object { $_ -split "," } |
+        ForEach-Object { $_.Trim().ToUpperInvariant() } |
+        Where-Object { $_ }
+)
+
 $ArgsList = @(
     "-m", "crypto_ai_trader.runner",
     "run",

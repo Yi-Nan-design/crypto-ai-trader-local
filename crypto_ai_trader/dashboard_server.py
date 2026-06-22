@@ -524,6 +524,13 @@ def read_ui_config() -> dict[str, Any]:
         "shadow_max_position_fraction": (
             cfg.shadow_max_position_fraction
         ),
+        "shadow_leverage": cfg.shadow_leverage,
+        "shadow_target_gross_exposure": (
+            cfg.shadow_target_gross_exposure
+        ),
+        "shadow_max_notional_fraction": (
+            cfg.shadow_max_position_fraction * cfg.shadow_leverage
+        ),
         "live_trading_enabled": False,
     }
 
